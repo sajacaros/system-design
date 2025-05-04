@@ -1,6 +1,6 @@
 package kr.study.systemdesign.uniqueid.service;
 
-import kr.study.systemdesign.uniqueid.UniqueIdProperty;
+import kr.study.systemdesign.uniqueid.config.UniqueIdProperty;
 import org.springframework.stereotype.Service;
 
 public interface SnowflakeIdGenerator {

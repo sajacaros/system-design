@@ -1,0 +1,18 @@
+### snowflake
+POST http://localhost:8080/api/url/sf/shorten
+Content-Type: application/json
+Accept: application/json
+
+{
+  "originUrl": "https://docs.google.com/presentation/d/1KD6mcoahq81s0hv6E440RkoJk320U5RhIpBYgTUmaJs/edit?usp=sharing"
+}
+
+
+### hash
+POST http://localhost:8080/api/url/hash/shorten
+Content-Type: application/json
+Accept: application/json
+
+{
+  "originUrl": "https://docs.google.com/presentation/d/1KD6mcoahq81s0hv6E440RkoJk320U5RhIpBYgTUmaJs/edit?usp=sharing"
+}

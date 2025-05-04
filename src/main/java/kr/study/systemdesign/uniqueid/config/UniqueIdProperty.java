@@ -1,4 +1,4 @@
-package kr.study.systemdesign.uniqueid;
+package kr.study.systemdesign.uniqueid.config;
 
 import lombok.Getter;
 import lombok.Setter;

@@ -1,5 +1,6 @@
 package kr.study.systemdesign.uniqueid;
 
+import kr.study.systemdesign.uniqueid.config.UniqueIdProperty;
 import kr.study.systemdesign.uniqueid.service.SnowflakeIdGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
