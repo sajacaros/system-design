@@ -76,6 +76,7 @@ docker compose up -d --build
 | 무엇 | URL | 비고 |
 |---|---|---|
 | Spring Boot 앱 | http://localhost:8080 | 부하 엔드포인트가 여기 있음 |
+| **Swagger UI (부하 조작)** | **http://localhost:8080/swagger-ui.html** | `/load/*` 엔드포인트를 폼·버튼으로 호출 — curl 안 써도 됨 |
 | Actuator 헬스체크 | http://localhost:8080/actuator/health | `{"status":"UP"}` 가 떠야 정상 |
 | 메트릭 원본(Prometheus 포맷) | http://localhost:8080/actuator/prometheus | 스크롤하면 모든 메트릭이 텍스트로 보임 |
 | Prometheus UI | http://localhost:9090 | `Status > Targets`에서 `spring-boot-app` 이 `UP` 인지 확인 |
@@ -91,6 +92,9 @@ docker compose down
 ## 4. 부하를 만들어 보고 그래프에서 확인하기
 
 세 가지 엔드포인트로 CPU·메모리 부하를 만들 수 있습니다.
+
+> **편한 방법**: http://localhost:8080/swagger-ui.html 에 접속하면 아래 엔드포인트들이 폼으로 표시됩니다.
+> 파라미터를 입력하고 **Try it out → Execute** 만 누르면 됩니다. 아래 `curl` 예시는 동일 동작의 CLI 버전입니다.
 
 ### CPU 부하
 ```bash
