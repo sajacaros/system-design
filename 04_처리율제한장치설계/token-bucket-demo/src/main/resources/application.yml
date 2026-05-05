@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: token-bucket-demo
+  thymeleaf:
+    cache: false
+
+server:
+  port: 8080
+
+logging:
+  level:
+    kr.study.tokenbucket: INFO
