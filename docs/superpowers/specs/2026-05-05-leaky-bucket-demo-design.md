@@ -179,19 +179,29 @@ Rate Limiter Demo  [● connected]
 - 같은 `reqId`의 두 row → 호버 시 둘 다 highlight
 - accepted / processed / rejected 색 구분 (파랑 / 초록 / 빨강)
 
-### 6.4 로그 / SSE 책임 분담 (토큰 버킷과 동일 패턴)
+### 6.4 로그 / SSE 책임 분담 (단일 SSE 파이프라인)
 
-- **fetch 응답 핸들러** → 로그 `202 Accepted reqId=...` 또는 `429 Rejected` 추가
-- **SSE 이벤트 핸들러** → 게이지 갱신, `processed`만 로그 추가 (fetch 응답에서는 알 수 없는 시점이므로)
+데모용이라 다중 사용자 호출을 가정하지 않는다. **로그·게이지 갱신을 모두 SSE 이벤트 핸들러에서 처리**해 두 패널이 동일한 패턴을 갖는다. fetch 응답 핸들러는 네트워크 오류만 처리하고 화면에 직접 영향을 주지 않는다.
 
-| SSE 이벤트 | 동작 |
-|---|---|
-| `init` | 큐 사이즈로 게이지 초기화 |
-| `accepted` | 게이지 +1칸 (로그는 fetch 응답에서) |
-| `processed` | 게이지 -1칸, 💧 애니메이션, 로그 `✓ Processed reqId=... size=N/15` 추가 |
-| `rejected` | 가득 찬 표시 깜빡 (로그는 fetch 응답에서) |
+**Token Bucket 패널** (기존 fetch-기반 로그를 SSE로 이전 — refill 이벤트도 자동 로깅됨)
 
-`size` 값을 fetch 응답 로그에 표시하기 위해, `LeakyRateLimitFilter` 응답에 헤더 `X-RateLimit-QueueSize`, `X-RateLimit-Capacity`를 함께 내려준다.
+| SSE 이벤트 | 로그 | 게이지 |
+|---|---|---|
+| `init` | (없음) | 초기 토큰 수 렌더 |
+| `consume` | `200 OK tokens=N` | 갱신 |
+| `refill` | `↻ Refill tokens=N` | 갱신 |
+| `rejected` | `429 Rejected tokens=0` | 빨강 깜빡 |
+
+**Leaky Bucket 패널**
+
+| SSE 이벤트 | 로그 | 게이지 |
+|---|---|---|
+| `init` | (없음) | 초기 큐 사이즈 렌더 |
+| `accepted` | `202 Accepted reqId=... size=N/15` | +1칸 |
+| `processed` | `✓ Processed reqId=... size=N/15` | -1칸, 💧 애니메이션 |
+| `rejected` | `429 Rejected size=15/15 queue full` | 가득 찬 표시 깜빡 |
+
+이 결정에 따라 응답 헤더에 size를 별도로 내릴 필요는 없다 (SSE 페이로드의 `size`로 충분). 기존 token-bucket UI도 SSE 단일 파이프라인으로 살짝 수정된다.
 
 탭마다 별개 EventSource: `/api/token/stream`, `/api/leaky/stream`.
 
