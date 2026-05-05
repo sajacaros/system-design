@@ -109,6 +109,11 @@
     }
 
     // ------- 시각 유틸 -------
+    function parseEvent(e) {
+        try { return JSON.parse(e.data); }
+        catch (err) { console.warn('bad SSE event', e.type, e.data, err); return null; }
+    }
+
     function ts() {
         const d = new Date();
         return String(d.getHours()).padStart(2, '0') + ':' +
@@ -155,21 +160,21 @@
     tokenSse.addEventListener('error', () => { connStatus.token = false; refreshStatus(); });
 
     tokenSse.addEventListener('init', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderTokens(d.tokens);
     });
     tokenSse.addEventListener('consume', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderTokens(d.tokens);
         appendRow(tokenLogEl, '<span class="ok">200 OK</span>  tokens=' + d.tokens);
     });
     tokenSse.addEventListener('refill', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderTokens(d.tokens);
         appendRow(tokenLogEl, '<span class="info">↻ Refill</span>  tokens=' + d.tokens);
     });
     tokenSse.addEventListener('rejected', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderTokens(d.tokens);
         appendRow(tokenLogEl, '<span class="ko">429 Rejected</span>  tokens=' + d.tokens);
     });
@@ -206,11 +211,11 @@
     leakySse.addEventListener('error', () => { connStatus.leaky = false; refreshStatus(); });
 
     leakySse.addEventListener('init', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderLeaky(d.size);
     });
     leakySse.addEventListener('accepted', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderLeaky(d.size);
         appendRow(leakyLogEl,
             '<span class="ok">202 Accepted</span>  ' +
@@ -218,7 +223,7 @@
             d.reqId);
     });
     leakySse.addEventListener('processed', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderLeaky(d.size);
         showDrip();
         appendRow(leakyLogEl,
@@ -227,7 +232,7 @@
             d.reqId);
     });
     leakySse.addEventListener('rejected', e => {
-        const d = JSON.parse(e.data);
+        const d = parseEvent(e); if (!d) return;
         renderLeaky(d.size);
         appendRow(leakyLogEl,
             '<span class="ko">429 Rejected</span>  size=' + d.size + '/' + LEAKY_CAPACITY + '  queue full');
