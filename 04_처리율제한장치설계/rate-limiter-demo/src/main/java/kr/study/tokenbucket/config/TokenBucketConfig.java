@@ -12,10 +12,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Configuration
-public class RateLimiterConfig {
+public class TokenBucketConfig {
 
-    static final int CAPACITY = 5;
-    static final int REFILL_INTERVAL_SECONDS = 10;
+    public static final int CAPACITY = 5;
+    public static final int REFILL_INTERVAL_SECONDS = 10;
 
     @Bean
     public TokenBucket tokenBucket() {
@@ -26,12 +26,12 @@ public class RateLimiterConfig {
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilter(RateLimiter limiter) {
         FilterRegistrationBean<RateLimitFilter> reg =
                 new FilterRegistrationBean<>(new RateLimitFilter(limiter));
-        reg.addUrlPatterns("/api/ping");
+        reg.addUrlPatterns("/api/token/ping");
         reg.setName("rateLimitFilter");
         return reg;
     }
 
-    @Bean(destroyMethod = "shutdown")
+    @Bean(name = "tokenBucketRefillScheduler", destroyMethod = "shutdown")
     public ScheduledExecutorService refillScheduler(RateLimiter limiter) {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "token-bucket-refill");
