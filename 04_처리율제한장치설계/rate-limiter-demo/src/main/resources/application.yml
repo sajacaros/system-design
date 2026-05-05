@@ -1,6 +1,6 @@
 spring:
   application:
-    name: token-bucket-demo
+    name: rate-limiter-demo
   thymeleaf:
     cache: false
 
@@ -9,4 +9,4 @@ server:
 
 logging:
   level:
-    kr.study.tokenbucket: INFO
+    kr.study: INFO
