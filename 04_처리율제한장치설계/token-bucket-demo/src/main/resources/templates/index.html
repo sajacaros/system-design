@@ -70,7 +70,11 @@
     function appendLog(status, remaining) {
         const row = document.createElement('div');
         row.className = 'row';
-        const ts = new Date().toISOString().substring(11, 23); // HH:mm:ss.sss
+        const d = new Date();
+        const ts = String(d.getHours()).padStart(2, '0') + ':' +
+                   String(d.getMinutes()).padStart(2, '0') + ':' +
+                   String(d.getSeconds()).padStart(2, '0') + '.' +
+                   String(d.getMilliseconds()).padStart(3, '0');
         const cls = status === 200 ? 'ok' : 'ko';
         const label = status === 200 ? '200 OK' : (status + ' Rejected');
         row.innerHTML =
