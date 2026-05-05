@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <title>Token Bucket Demo</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 32px auto; padding: 0 16px; color: #1f2328; }
+        h1 { margin: 0 0 4px; }
+        .meta { color: #57606a; font-size: 14px; margin-bottom: 24px; }
+        .status { display: inline-block; margin-left: 12px; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .status.connected { background: #dafbe1; color: #1a7f37; }
+        .status.disconnected { background: #ffebe9; color: #cf222e; }
+        .gauge { display: flex; gap: 12px; margin: 24px 0; }
+        .token { width: 48px; height: 48px; border-radius: 50%; background: #d0d7de; transition: background 0.15s; }
+        .token.filled { background: #1a7f37; }
+        button { padding: 10px 20px; font-size: 16px; background: #0969da; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+        button:active { background: #0860c1; }
+        .log { margin-top: 32px; border-top: 1px solid #d0d7de; padding-top: 16px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; max-height: 320px; overflow-y: auto; }
+        .log .row { padding: 4px 0; border-bottom: 1px solid #f6f8fa; }
+        .log .ok { color: #1a7f37; }
+        .log .ko { color: #cf222e; }
+        .log .ts { color: #57606a; margin-right: 8px; }
+    </style>
+</head>
+<body>
+<h1>Token Bucket Demo
+    <span id="status" class="status disconnected">disconnected</span>
+</h1>
+<div class="meta">
+    capacity = <span th:text="${capacity}">5</span>
+    · refill rate: 1 token / <span th:text="${refillIntervalSeconds}">10</span>s
+</div>
+
+<div id="gauge" class="gauge"
+     th:attr="data-capacity=${capacity}"></div>
+
+<button id="callBtn" type="button">Call /api/ping</button>
+
+<div class="log" id="log"></div>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const capacity = /*[[${capacity}]]*/ 5;
+    /*]]>*/
+
+    const gaugeEl = document.getElementById('gauge');
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const btnEl = document.getElementById('callBtn');
+
+    // 게이지 칸 capacity 개 생성
+    for (let i = 0; i < capacity; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'token';
+        gaugeEl.appendChild(dot);
+    }
+    const dots = gaugeEl.querySelectorAll('.token');
+
+    function renderTokens(n) {
+        dots.forEach((dot, i) => {
+            dot.classList.toggle('filled', i < n);
+        });
+    }
+
+    function setConnected(connected) {
+        statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
+        statusEl.textContent = connected ? 'connected' : 'disconnected';
+    }
+
+    function appendLog(status, remaining) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const ts = new Date().toISOString().substring(11, 23); // HH:mm:ss.sss
+        const cls = status === 200 ? 'ok' : 'ko';
+        const label = status === 200 ? '200 OK' : (status + ' Rejected');
+        row.innerHTML =
+            '<span class="ts">' + ts + '</span>' +
+            '<span class="' + cls + '">' + label + '</span>' +
+            '  remaining=' + (remaining ?? '?');
+        logEl.prepend(row);
+    }
+
+    // SSE 구독
+    const es = new EventSource('/api/bucket/stream');
+    es.addEventListener('open', () => setConnected(true));
+    es.addEventListener('error', () => setConnected(false));
+
+    function handleEvent(e) {
+        try {
+            const data = JSON.parse(e.data);
+            renderTokens(data.tokens);
+        } catch (err) {
+            console.warn('bad event', e, err);
+        }
+    }
+    ['init', 'consume', 'rejected', 'refill'].forEach(name =>
+        es.addEventListener(name, handleEvent));
+
+    // 버튼: /api/ping 호출
+    btnEl.addEventListener('click', async () => {
+        try {
+            const res = await fetch('/api/ping');
+            const remaining = res.headers.get('X-Ratelimit-Remaining');
+            appendLog(res.status, remaining);
+        } catch (err) {
+            appendLog(0, '?');
+        }
+    });
+</script>
+</body>
+</html>
