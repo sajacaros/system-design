@@ -17,7 +17,7 @@ public class BucketStreamController {
         this.limiter = limiter;
     }
 
-    @GetMapping(path = "/api/bucket/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(path = "/api/token/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
         SseEmitter emitter = publisher.subscribe();
         publisher.sendInitial(emitter, limiter.tokens(), limiter.capacity());

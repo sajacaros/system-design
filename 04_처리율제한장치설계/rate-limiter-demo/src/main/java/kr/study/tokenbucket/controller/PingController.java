@@ -9,7 +9,7 @@ import java.util.Map;
 @RestController
 public class PingController {
 
-    @GetMapping("/api/ping")
+    @GetMapping("/api/token/ping")
     public Map<String, Object> ping() {
         return Map.of(
                 "message", "pong",
