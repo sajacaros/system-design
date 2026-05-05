@@ -25,7 +25,7 @@
 
         /* Leaky Bucket gauge (vertical water tank) */
         .tank-wrap { display: flex; flex-direction: column; align-items: center; margin: 24px 0; }
-        .tank { display: flex; flex-direction: column-reverse; width: 80px; height: 360px; border: 2px solid #57606a; border-radius: 4px 4px 8px 8px; overflow: hidden; background: #f6f8fa; }
+        .tank { display: flex; flex-direction: column-reverse; width: 80px; height: 100px; border: 2px solid #57606a; border-radius: 4px 4px 8px 8px; overflow: hidden; background: #f6f8fa; }
         .tank .cell { flex: 1; border-top: 1px solid #eaeef2; transition: background 0.2s; }
         .tank .cell.filled { background: #0969da; }
         .tank.full .cell.filled:nth-last-child(-n+2) { animation: pulse-red 0.8s infinite; }
@@ -71,7 +71,7 @@
 <!-- Leaky Bucket panel -->
 <div class="panel" data-panel="leaky">
     <div class="meta">
-        capacity = <span th:text="${leakyCapacity}">15</span>
+        capacity = <span th:text="${leakyCapacity}">5</span>
         · leak rate: 1 req / <span th:text="${leakyLeakIntervalSeconds}">3</span>s
     </div>
     <div class="tank-wrap">
@@ -86,7 +86,7 @@
 <script th:inline="javascript">
     /*<![CDATA[*/
     const TOKEN_CAPACITY = /*[[${tokenCapacity}]]*/ 5;
-    const LEAKY_CAPACITY = /*[[${leakyCapacity}]]*/ 15;
+    const LEAKY_CAPACITY = /*[[${leakyCapacity}]]*/ 5;
     /*]]>*/
 
     // ------- 탭 전환 -------

@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class LeakyBucketConfig {
 
-    public static final int CAPACITY = 15;
+    public static final int CAPACITY = 5;
     public static final int LEAK_INTERVAL_SECONDS = 3;
 
     @Bean

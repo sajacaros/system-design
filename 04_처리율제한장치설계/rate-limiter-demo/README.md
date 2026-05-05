@@ -9,7 +9,7 @@
 
 | | Token Bucket | Leaky Bucket |
 |---|---|---|
-| capacity | 5 | 15 |
+| capacity | 5 | 5 |
 | rate | refill: 1 token / 10s | leak: 1 req / 3s |
 | 응답 | sync — `200 OK` / `429` | async — `202 Accepted` + `reqId`, 누수 시 SSE `processed` |
 | 버스트 | ✅ capacity까지 즉시 | ❌ 큐가 받기는 하나 처리율은 균일 |
