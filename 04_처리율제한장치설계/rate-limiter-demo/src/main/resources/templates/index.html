@@ -37,8 +37,6 @@
         /* Fixed Window panel */
         .clock-bar { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 14px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
         .clock-label { font-size: 12px; color: #57606a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-        .clock-now { font-size: 20px; font-weight: 600; color: #1f2328; letter-spacing: 0.5px; }
-        .clock-sep { color: #d0d7de; }
         .clock-countdown { font-size: 16px; font-weight: 600; color: #0969da; min-width: 56px; text-align: right; }
         .clock-countdown.warn { color: #bf8700; }
         .clock-countdown.danger { color: #cf222e; animation: pulse-text 0.6s infinite; }
@@ -120,9 +118,6 @@
         · 최신 윈도우는 왼쪽, 최대 10개 표시
     </div>
     <div class="clock-bar">
-        <span class="clock-label">현재 시각</span>
-        <span id="fixed-now" class="clock-now">--:--:--.---</span>
-        <span class="clock-sep">·</span>
         <span class="clock-label">다음 윈도우까지</span>
         <span id="fixed-countdown" class="clock-countdown">--</span>
         <span class="clock-bar-track"><span id="fixed-progress" class="clock-bar-fill"></span></span>
@@ -394,25 +389,15 @@
         fetch('/api/fixed/ping').catch(err => console.warn('fixed fetch failed', err));
     });
 
-    // ------- Fixed Window: live clock + 다음 윈도우 카운트다운 -------
-    const fixedNowEl = document.getElementById('fixed-now');
+    // ------- Fixed Window: 다음 윈도우 카운트다운 -------
     const fixedCountdownEl = document.getElementById('fixed-countdown');
     const fixedProgressEl = document.getElementById('fixed-progress');
-
-    function fmtClockMs(ms) {
-        const d = new Date(ms);
-        return String(d.getHours()).padStart(2, '0') + ':' +
-               String(d.getMinutes()).padStart(2, '0') + ':' +
-               String(d.getSeconds()).padStart(2, '0') + '.' +
-               String(d.getMilliseconds()).padStart(3, '0');
-    }
 
     function tickClock() {
         const now = Date.now();
         const remainMs = FIXED_WINDOW_MS - (now % FIXED_WINDOW_MS);
         const elapsedRatio = 1 - (remainMs / FIXED_WINDOW_MS);
 
-        fixedNowEl.textContent = fmtClockMs(now);
         fixedCountdownEl.textContent = (remainMs / 1000).toFixed(1) + 's';
         fixedProgressEl.style.width = (elapsedRatio * 100).toFixed(1) + '%';
 
