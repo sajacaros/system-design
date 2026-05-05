@@ -18,10 +18,10 @@ public class BucketEventPublisher {
 
     public SseEmitter subscribe() {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
-        emitters.add(emitter);
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> emitters.remove(emitter));
         emitter.onError(e -> emitters.remove(emitter));
+        emitters.add(emitter);
         log.debug("emitter subscribed (total={})", emitters.size());
         return emitter;
     }
@@ -33,6 +33,7 @@ public class BucketEventPublisher {
                     .data(payload(tokens, capacity)));
         } catch (IOException e) {
             emitters.remove(emitter);
+            log.debug("sendInitial failed, emitter removed", e);
         }
     }
 
@@ -44,6 +45,7 @@ public class BucketEventPublisher {
                         .data("{\"tokens\":" + tokens + "}"));
             } catch (IOException e) {
                 emitters.remove(emitter);
+                log.debug("publish failed, emitter removed", e);
             }
         }
     }
