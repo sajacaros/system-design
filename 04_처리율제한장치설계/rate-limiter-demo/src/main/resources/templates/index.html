@@ -2,7 +2,7 @@
 <html lang="ko" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="utf-8" />
-    <title>Token Bucket Demo</title>
+    <title>Rate Limiter Demo</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 32px auto; padding: 0 16px; color: #1f2328; }
         h1 { margin: 0 0 4px; }
@@ -23,7 +23,7 @@
     </style>
 </head>
 <body>
-<h1>Token Bucket Demo
+<h1>Rate Limiter Demo
     <span id="status" class="status disconnected">disconnected</span>
 </h1>
 <div class="meta">
@@ -34,7 +34,7 @@
 <div id="gauge" class="gauge"
      th:attr="data-capacity=${capacity}"></div>
 
-<button id="callBtn" type="button">Call /api/ping</button>
+<button id="callBtn" type="button">Call /api/token/ping</button>
 
 <div class="log" id="log"></div>
 
@@ -85,7 +85,7 @@
     }
 
     // SSE 구독
-    const es = new EventSource('/api/bucket/stream');
+    const es = new EventSource('/api/token/stream');
     es.addEventListener('open', () => setConnected(true));
     es.addEventListener('error', () => setConnected(false));
 
@@ -103,7 +103,7 @@
     // 버튼: /api/ping 호출
     btnEl.addEventListener('click', async () => {
         try {
-            const res = await fetch('/api/ping');
+            const res = await fetch('/api/token/ping');
             const remaining = res.headers.get('X-Ratelimit-Remaining');
             appendLog(res.status, remaining);
         } catch (err) {

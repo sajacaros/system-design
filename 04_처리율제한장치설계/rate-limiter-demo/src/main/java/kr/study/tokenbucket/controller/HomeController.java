@@ -1,5 +1,6 @@
 package kr.study.tokenbucket.controller;
 
+import kr.study.tokenbucket.config.TokenBucketConfig;
 import kr.study.tokenbucket.ratelimit.RateLimiter;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -17,7 +18,7 @@ public class HomeController {
     @GetMapping("/")
     public String home(Model model) {
         model.addAttribute("capacity", limiter.capacity());
-        model.addAttribute("refillIntervalSeconds", 10);
+        model.addAttribute("refillIntervalSeconds", TokenBucketConfig.REFILL_INTERVAL_SECONDS);
         return "index";
     }
 }
