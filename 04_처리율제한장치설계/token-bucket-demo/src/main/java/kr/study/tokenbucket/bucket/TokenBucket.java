@@ -22,7 +22,7 @@ public class TokenBucket {
     public boolean tryConsume() {
         while (true) {
             int current = tokens.get();
-            if (current <= 0) {
+            if (current == 0) {
                 return false;
             }
             if (tokens.compareAndSet(current, current - 1)) {
