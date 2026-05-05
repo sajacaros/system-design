@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>Rate Limiter Demo</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 720px; margin: 32px auto; padding: 0 16px; color: #1f2328; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #1f2328; }
         h1 { margin: 0 0 4px; }
         .status { display: inline-block; margin-left: 12px; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
         .status.connected { background: #dafbe1; color: #1a7f37; }
@@ -34,6 +34,34 @@
         .drip { font-size: 22px; height: 28px; opacity: 0; transition: opacity 0.15s; }
         .drip.show { opacity: 1; }
 
+        /* Fixed Window panel */
+        .clock-bar { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 14px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+        .clock-label { font-size: 12px; color: #57606a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .clock-now { font-size: 20px; font-weight: 600; color: #1f2328; letter-spacing: 0.5px; }
+        .clock-sep { color: #d0d7de; }
+        .clock-countdown { font-size: 16px; font-weight: 600; color: #0969da; min-width: 56px; text-align: right; }
+        .clock-countdown.warn { color: #bf8700; }
+        .clock-countdown.danger { color: #cf222e; animation: pulse-text 0.6s infinite; }
+        @keyframes pulse-text { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+        .clock-bar-track { flex: 1; height: 6px; background: #d0d7de; border-radius: 3px; overflow: hidden; margin-left: 6px; }
+        .clock-bar-fill { display: block; height: 100%; width: 0%; background: #0969da; transition: width 0.1s linear, background 0.2s; }
+        .clock-bar-fill.warn { background: #bf8700; }
+        .clock-bar-fill.danger { background: #cf222e; }
+
+        .windows-row { display: flex; flex-direction: row; gap: 12px; overflow-x: auto; padding: 8px 4px; margin: 24px 0; min-height: 200px; }
+        .window-block { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; opacity: 0.65; transition: opacity 0.2s; }
+        .window-block.active { opacity: 1; }
+        .window-time { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: #57606a; margin-bottom: 6px; }
+        .window-block.active .window-time { color: #1f883d; font-weight: 600; }
+        .window-bucket { display: flex; flex-direction: column-reverse; width: 56px; height: 130px; border: 2px solid #d0d7de; border-radius: 4px; overflow: hidden; background: #f6f8fa; }
+        .window-block.active .window-bucket { border-color: #1f883d; box-shadow: 0 0 0 2px rgba(31, 136, 61, 0.2); }
+        .window-bucket .cell { flex: 1; border-top: 1px solid #eaeef2; transition: background 0.2s; }
+        .window-bucket .cell.filled { background: #8250df; }
+        .window-count { font-size: 11px; color: #57606a; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+        .window-block.active .window-count { color: #1f883d; font-weight: 600; }
+        .window-block.entering { animation: slide-in 0.3s ease-out; }
+        @keyframes slide-in { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
         button { padding: 10px 20px; font-size: 16px; background: #0969da; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
         button:active { background: #0860c1; }
 
@@ -55,6 +83,7 @@
 <div class="tabs">
     <div class="tab active" data-tab="token">Token Bucket</div>
     <div class="tab" data-tab="leaky">Leaky Bucket</div>
+    <div class="tab" data-tab="fixed">Fixed Window</div>
 </div>
 
 <!-- Token Bucket panel -->
@@ -83,10 +112,34 @@
     <div class="log" id="leaky-log"></div>
 </div>
 
+<!-- Fixed Window panel -->
+<div class="panel" data-panel="fixed">
+    <div class="meta">
+        threshold = <span th:text="${fixedThreshold}">5</span> req
+        · window: <span th:text="${fixedWindowSeconds}">10</span>s
+        · 최신 윈도우는 왼쪽, 최대 10개 표시
+    </div>
+    <div class="clock-bar">
+        <span class="clock-label">현재 시각</span>
+        <span id="fixed-now" class="clock-now">--:--:--.---</span>
+        <span class="clock-sep">·</span>
+        <span class="clock-label">다음 윈도우까지</span>
+        <span id="fixed-countdown" class="clock-countdown">--</span>
+        <span class="clock-bar-track"><span id="fixed-progress" class="clock-bar-fill"></span></span>
+    </div>
+    <div id="fixed-windows" class="windows-row" th:attr="data-threshold=${fixedThreshold}"></div>
+    <button id="fixed-btn" type="button">Call /api/fixed/ping</button>
+    <div class="log" id="fixed-log"></div>
+</div>
+
 <script th:inline="javascript">
     /*<![CDATA[*/
     const TOKEN_CAPACITY = /*[[${tokenCapacity}]]*/ 5;
     const LEAKY_CAPACITY = /*[[${leakyCapacity}]]*/ 5;
+    const FIXED_THRESHOLD = /*[[${fixedThreshold}]]*/ 5;
+    const FIXED_WINDOW_SECONDS = /*[[${fixedWindowSeconds}]]*/ 10;
+    const FIXED_WINDOW_MS = FIXED_WINDOW_SECONDS * 1000;
+    const FIXED_MAX_WINDOWS = 10;
     /*]]>*/
 
     // ------- 탭 전환 -------
@@ -101,9 +154,9 @@
 
     // ------- 연결 상태 -------
     const statusEl = document.getElementById('status');
-    const connStatus = { token: false, leaky: false };
+    const connStatus = { token: false, leaky: false, fixed: false };
     function refreshStatus() {
-        const all = connStatus.token && connStatus.leaky;
+        const all = connStatus.token && connStatus.leaky && connStatus.fixed;
         statusEl.className = 'status ' + (all ? 'connected' : 'disconnected');
         statusEl.textContent = all ? 'connected' : 'disconnected';
     }
@@ -241,6 +294,137 @@
     leakyBtnEl.addEventListener('click', () => {
         fetch('/api/leaky/ping').catch(err => console.warn('leaky fetch failed', err));
     });
+
+    // ------- Fixed Window -------
+    const fixedWindowsEl = document.getElementById('fixed-windows');
+    const fixedLogEl = document.getElementById('fixed-log');
+    const fixedBtnEl = document.getElementById('fixed-btn');
+
+    function fmtClock(ms) {
+        const d = new Date(ms);
+        return String(d.getHours()).padStart(2, '0') + ':' +
+               String(d.getMinutes()).padStart(2, '0') + ':' +
+               String(d.getSeconds()).padStart(2, '0');
+    }
+
+    function buildWindowBlock(windowStart, count) {
+        const block = document.createElement('div');
+        block.className = 'window-block entering';
+        block.dataset.windowStart = String(windowStart);
+
+        const time = document.createElement('div');
+        time.className = 'window-time';
+        time.textContent = fmtClock(windowStart);
+
+        const bucket = document.createElement('div');
+        bucket.className = 'window-bucket';
+        for (let i = 0; i < FIXED_THRESHOLD; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            bucket.appendChild(cell);
+        }
+
+        const countEl = document.createElement('div');
+        countEl.className = 'window-count';
+
+        block.appendChild(time);
+        block.appendChild(bucket);
+        block.appendChild(countEl);
+        setTimeout(() => block.classList.remove('entering'), 300);
+
+        renderWindowBlock(block, count);
+        return block;
+    }
+
+    function renderWindowBlock(block, count) {
+        const cells = block.querySelectorAll('.window-bucket .cell');
+        cells.forEach((c, i) => c.classList.toggle('filled', i < count));
+        block.querySelector('.window-count').textContent = count + ' / ' + FIXED_THRESHOLD;
+        block.classList.toggle('full', count >= FIXED_THRESHOLD);
+    }
+
+    function ensureCurrentWindow(windowStart, count) {
+        const first = fixedWindowsEl.firstElementChild;
+        if (!first || first.dataset.windowStart !== String(windowStart)) {
+            fixedWindowsEl.querySelectorAll('.window-block')
+                .forEach(b => b.classList.remove('active'));
+            const block = buildWindowBlock(windowStart, count);
+            block.classList.add('active');
+            fixedWindowsEl.prepend(block);
+            while (fixedWindowsEl.children.length > FIXED_MAX_WINDOWS) {
+                fixedWindowsEl.removeChild(fixedWindowsEl.lastElementChild);
+            }
+            return block;
+        }
+        renderWindowBlock(first, count);
+        return first;
+    }
+
+    const fixedSse = new EventSource('/api/fixed/stream');
+    fixedSse.addEventListener('open', () => { connStatus.fixed = true; refreshStatus(); });
+    fixedSse.addEventListener('error', () => { connStatus.fixed = false; refreshStatus(); });
+
+    fixedSse.addEventListener('init', e => {
+        const d = parseEvent(e); if (!d) return;
+        fixedWindowsEl.innerHTML = '';
+        ensureCurrentWindow(d.windowStart, d.count);
+    });
+    fixedSse.addEventListener('window_open', e => {
+        const d = parseEvent(e); if (!d) return;
+        ensureCurrentWindow(d.windowStart, d.count);
+        appendRow(fixedLogEl,
+            '<span class="info">▷ Window open</span>  ' + fmtClock(d.windowStart));
+    });
+    fixedSse.addEventListener('accepted', e => {
+        const d = parseEvent(e); if (!d) return;
+        ensureCurrentWindow(d.windowStart, d.count);
+        appendRow(fixedLogEl,
+            '<span class="ok">200 OK</span>  ' + fmtClock(d.windowStart) +
+            '  count=' + d.count + '/' + d.threshold);
+    });
+    fixedSse.addEventListener('rejected', e => {
+        const d = parseEvent(e); if (!d) return;
+        ensureCurrentWindow(d.windowStart, d.count);
+        appendRow(fixedLogEl,
+            '<span class="ko">429 Rejected</span>  ' + fmtClock(d.windowStart) +
+            '  count=' + d.count + '/' + d.threshold);
+    });
+
+    fixedBtnEl.addEventListener('click', () => {
+        fetch('/api/fixed/ping').catch(err => console.warn('fixed fetch failed', err));
+    });
+
+    // ------- Fixed Window: live clock + 다음 윈도우 카운트다운 -------
+    const fixedNowEl = document.getElementById('fixed-now');
+    const fixedCountdownEl = document.getElementById('fixed-countdown');
+    const fixedProgressEl = document.getElementById('fixed-progress');
+
+    function fmtClockMs(ms) {
+        const d = new Date(ms);
+        return String(d.getHours()).padStart(2, '0') + ':' +
+               String(d.getMinutes()).padStart(2, '0') + ':' +
+               String(d.getSeconds()).padStart(2, '0') + '.' +
+               String(d.getMilliseconds()).padStart(3, '0');
+    }
+
+    function tickClock() {
+        const now = Date.now();
+        const remainMs = FIXED_WINDOW_MS - (now % FIXED_WINDOW_MS);
+        const elapsedRatio = 1 - (remainMs / FIXED_WINDOW_MS);
+
+        fixedNowEl.textContent = fmtClockMs(now);
+        fixedCountdownEl.textContent = (remainMs / 1000).toFixed(1) + 's';
+        fixedProgressEl.style.width = (elapsedRatio * 100).toFixed(1) + '%';
+
+        const danger = remainMs <= 1500;
+        const warn = !danger && remainMs <= 3000;
+        fixedCountdownEl.classList.toggle('danger', danger);
+        fixedCountdownEl.classList.toggle('warn', warn);
+        fixedProgressEl.classList.toggle('danger', danger);
+        fixedProgressEl.classList.toggle('warn', warn);
+    }
+    tickClock();
+    setInterval(tickClock, 100);
 </script>
 </body>
 </html>

@@ -1,5 +1,7 @@
 package kr.study.tokenbucket.controller;
 
+import kr.study.fixedwindow.config.FixedWindowConfig;
+import kr.study.fixedwindow.ratelimit.FixedWindowRateLimiter;
 import kr.study.leakybucket.config.LeakyBucketConfig;
 import kr.study.leakybucket.ratelimit.LeakyRateLimiter;
 import kr.study.tokenbucket.config.TokenBucketConfig;
@@ -13,10 +15,14 @@ public class HomeController {
 
     private final RateLimiter tokenLimiter;
     private final LeakyRateLimiter leakyLimiter;
+    private final FixedWindowRateLimiter fixedLimiter;
 
-    public HomeController(RateLimiter tokenLimiter, LeakyRateLimiter leakyLimiter) {
+    public HomeController(RateLimiter tokenLimiter,
+                          LeakyRateLimiter leakyLimiter,
+                          FixedWindowRateLimiter fixedLimiter) {
         this.tokenLimiter = tokenLimiter;
         this.leakyLimiter = leakyLimiter;
+        this.fixedLimiter = fixedLimiter;
     }
 
     @GetMapping("/")
@@ -25,6 +31,8 @@ public class HomeController {
         model.addAttribute("tokenRefillIntervalSeconds", TokenBucketConfig.REFILL_INTERVAL_SECONDS);
         model.addAttribute("leakyCapacity", leakyLimiter.capacity());
         model.addAttribute("leakyLeakIntervalSeconds", LeakyBucketConfig.LEAK_INTERVAL_SECONDS);
+        model.addAttribute("fixedThreshold", fixedLimiter.threshold());
+        model.addAttribute("fixedWindowSeconds", FixedWindowConfig.WINDOW_SECONDS);
         return "index";
     }
 }
