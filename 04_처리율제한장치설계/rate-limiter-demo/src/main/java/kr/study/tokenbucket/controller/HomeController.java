@@ -4,6 +4,8 @@ import kr.study.fixedwindow.config.FixedWindowConfig;
 import kr.study.fixedwindow.ratelimit.FixedWindowRateLimiter;
 import kr.study.leakybucket.config.LeakyBucketConfig;
 import kr.study.leakybucket.ratelimit.LeakyRateLimiter;
+import kr.study.slidingwindowlog.config.SlidingWindowLogConfig;
+import kr.study.slidingwindowlog.ratelimit.SlidingWindowLogRateLimiter;
 import kr.study.tokenbucket.config.TokenBucketConfig;
 import kr.study.tokenbucket.ratelimit.RateLimiter;
 import org.springframework.stereotype.Controller;
@@ -16,13 +18,16 @@ public class HomeController {
     private final RateLimiter tokenLimiter;
     private final LeakyRateLimiter leakyLimiter;
     private final FixedWindowRateLimiter fixedLimiter;
+    private final SlidingWindowLogRateLimiter slidingLogLimiter;
 
     public HomeController(RateLimiter tokenLimiter,
                           LeakyRateLimiter leakyLimiter,
-                          FixedWindowRateLimiter fixedLimiter) {
+                          FixedWindowRateLimiter fixedLimiter,
+                          SlidingWindowLogRateLimiter slidingLogLimiter) {
         this.tokenLimiter = tokenLimiter;
         this.leakyLimiter = leakyLimiter;
         this.fixedLimiter = fixedLimiter;
+        this.slidingLogLimiter = slidingLogLimiter;
     }
 
     @GetMapping("/")
@@ -33,6 +38,8 @@ public class HomeController {
         model.addAttribute("leakyLeakIntervalSeconds", LeakyBucketConfig.LEAK_INTERVAL_SECONDS);
         model.addAttribute("fixedThreshold", fixedLimiter.threshold());
         model.addAttribute("fixedWindowSeconds", FixedWindowConfig.WINDOW_SECONDS);
+        model.addAttribute("slidingThreshold", slidingLogLimiter.threshold());
+        model.addAttribute("slidingWindowSeconds", SlidingWindowLogConfig.WINDOW_SECONDS);
         return "index";
     }
 }
