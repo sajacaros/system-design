@@ -82,6 +82,43 @@
         .sliding-col-slot.accepted { background: #8250df; }
         .sliding-col-slot.rejected { background: #cf222e; }
 
+        /* Sliding Window Counter panel */
+        .swc-stage { position: relative; height: 230px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; margin: 16px 0; overflow: hidden; }
+        .swc-axis { position: absolute; top: 0; left: 24px; right: 24px; height: 24px; border-bottom: 1px dashed #d0d7de; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #57606a; pointer-events: none; }
+        .swc-axis .tick { position: absolute; top: 6px; transform: translateX(-50%); }
+        .swc-axis .tick.boundary { color: #1f2328; font-weight: 600; }
+        .swc-axis .label-prev { position: absolute; top: 6px; left: 25%; transform: translateX(-50%); color: #8c959f; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10px; }
+        .swc-axis .label-curr { position: absolute; top: 6px; left: 75%; transform: translateX(-50%); color: #1f883d; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10px; font-weight: 600; }
+        .swc-windows { position: absolute; top: 24px; bottom: 28px; left: 24px; right: 24px; display: flex; gap: 4px; }
+        .swc-window { flex: 1; position: relative; border: 2px solid #d0d7de; border-radius: 4px; background: #fff; }
+        .swc-window.prev { border-color: #8c959f; }
+        .swc-window.curr { border-color: #1f883d; background: rgba(31,136,61,0.04); }
+        .swc-window-label { position: absolute; top: 4px; left: 6px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #57606a; }
+        .swc-window.curr .swc-window-label { color: #1f883d; font-weight: 600; }
+        .swc-window-count { position: absolute; bottom: 4px; right: 6px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 18px; font-weight: 600; color: #1f2328; }
+        .swc-window-bar { position: absolute; bottom: 22px; left: 6px; right: 6px; height: 60px; display: flex; flex-direction: column-reverse; gap: 2px; }
+        .swc-window-bar .cell { flex: 1; background: #eaeef2; border-radius: 1px; transition: background 0.2s; }
+        .swc-window-bar .cell.filled { background: #8250df; }
+        .swc-window.prev .swc-window-bar .cell.filled { background: #8c959f; }
+
+        /* sliding window overlay (translucent rectangle of width = window_size, ending at "now") */
+        .swc-slide { position: absolute; top: 24px; bottom: 28px; background: rgba(9, 105, 218, 0.08); border-left: 2px solid rgba(9, 105, 218, 0.7); border-right: 2px solid rgba(9, 105, 218, 0.7); pointer-events: none; transition: left 0.1s linear; }
+        .swc-slide-label { position: absolute; top: 2px; right: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; color: #0969da; font-weight: 600; }
+        /* now cursor inside current window */
+        .swc-now { position: absolute; top: 24px; bottom: 28px; width: 0; border-left: 2px solid #cf222e; transition: left 0.1s linear; pointer-events: none; }
+        .swc-now-label { position: absolute; top: -16px; left: 0; transform: translateX(-50%); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; color: #cf222e; font-weight: 600; white-space: nowrap; background: #fff; padding: 0 3px; }
+        .swc-bottom-axis { position: absolute; bottom: 0; left: 24px; right: 24px; height: 24px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #57606a; }
+        .swc-bottom-axis .tick { position: absolute; top: 6px; transform: translateX(-50%); white-space: nowrap; }
+        .swc-bottom-axis .tick.now { color: #cf222e; font-weight: 600; }
+
+        .swc-formula { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 12px 14px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; margin: 12px 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; color: #1f2328; }
+        .swc-formula .lhs { color: #0969da; font-weight: 600; }
+        .swc-formula .op { color: #6e7781; }
+        .swc-formula .num { color: #1f883d; }
+        .swc-formula .verdict { margin-left: auto; padding: 4px 10px; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; }
+        .swc-formula .verdict.ok { background: #dafbe1; color: #1a7f37; }
+        .swc-formula .verdict.ko { background: #ffebe9; color: #cf222e; }
+
         button { padding: 10px 20px; font-size: 16px; background: #0969da; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
         button:active { background: #0860c1; }
 
@@ -105,6 +142,7 @@
     <div class="tab" data-tab="leaky">Leaky Bucket</div>
     <div class="tab" data-tab="fixed">Fixed Window</div>
     <div class="tab" data-tab="sliding">Sliding Log</div>
+    <div class="tab" data-tab="sliding-counter">Sliding Counter</div>
 </div>
 
 <!-- Token Bucket panel -->
@@ -172,6 +210,62 @@
     <div class="log" id="sliding-log"></div>
 </div>
 
+<!-- Sliding Window Counter panel -->
+<div class="panel" data-panel="sliding-counter">
+    <div class="meta">
+        threshold = <span th:text="${slidingCounterThreshold}">7</span> req
+        · window: <span th:text="${slidingCounterWindowSeconds}">10</span>s
+        · 매 요청마다 weighted = curr + prev × (1 − elapsed/W) 계산
+    </div>
+    <div class="swc-stage">
+        <div class="swc-axis">
+            <span class="label-prev">prev window</span>
+            <span class="label-curr">curr window ← now</span>
+        </div>
+        <div class="swc-windows">
+            <div class="swc-window prev">
+                <span class="swc-window-label">prev</span>
+                <div class="swc-window-bar" id="swc-prev-bar"></div>
+                <span class="swc-window-count" id="swc-prev-count">0</span>
+            </div>
+            <div class="swc-window curr">
+                <span class="swc-window-label">curr</span>
+                <div class="swc-window-bar" id="swc-curr-bar"></div>
+                <span class="swc-window-count" id="swc-curr-count">0</span>
+            </div>
+        </div>
+        <div class="swc-slide" id="swc-slide">
+            <span class="swc-slide-label">sliding window (W)</span>
+        </div>
+        <div class="swc-now" id="swc-now">
+            <span class="swc-now-label" id="swc-now-label">now</span>
+        </div>
+        <div class="swc-bottom-axis" id="swc-bottom-axis"></div>
+    </div>
+    <div class="swc-formula">
+        <span class="lhs">weighted</span>
+        <span class="op">=</span>
+        <span>curr</span>
+        <span class="op">+</span>
+        <span>prev</span>
+        <span class="op">×</span>
+        <span>(1 − elapsed/W)</span>
+        <span class="op">→</span>
+        <span class="num" id="swc-curr-num">0</span>
+        <span class="op">+</span>
+        <span class="num" id="swc-prev-num">0</span>
+        <span class="op">×</span>
+        <span class="num" id="swc-weight-num">1.00</span>
+        <span class="op">=</span>
+        <span class="num" id="swc-weighted-num">0.00</span>
+        <span class="op">/</span>
+        <span th:text="${slidingCounterThreshold}">7</span>
+        <span class="verdict ok" id="swc-verdict">통과</span>
+    </div>
+    <button id="swc-btn" type="button">Call /api/sliding-counter/ping</button>
+    <div class="log" id="swc-log"></div>
+</div>
+
 <script th:inline="javascript">
     /*<![CDATA[*/
     const TOKEN_CAPACITY = /*[[${tokenCapacity}]]*/ 5;
@@ -188,6 +282,10 @@
     const SLIDING_DISPLAY_SECONDS = SLIDING_WINDOW_SECONDS + 4;    // 윈도 + 만료 영역 4s
     const SLIDING_DISPLAY_MS = SLIDING_DISPLAY_SECONDS * 1000;
     const SLIDING_COL_WIDTH = 32;
+    const SWC_THRESHOLD = /*[[${slidingCounterThreshold}]]*/ 7;
+    const SWC_WINDOW_SECONDS = /*[[${slidingCounterWindowSeconds}]]*/ 10;
+    const SWC_WINDOW_MS = SWC_WINDOW_SECONDS * 1000;
+    const SWC_BAR_CELLS = 10;                                          // 카운트 시각화 셀 수
     /*]]>*/
 
     // ------- 탭 전환 -------
@@ -202,9 +300,9 @@
 
     // ------- 연결 상태 -------
     const statusEl = document.getElementById('status');
-    const connStatus = { token: false, leaky: false, fixed: false, sliding: false };
+    const connStatus = { token: false, leaky: false, fixed: false, sliding: false, swc: false };
     function refreshStatus() {
-        const all = connStatus.token && connStatus.leaky && connStatus.fixed && connStatus.sliding;
+        const all = connStatus.token && connStatus.leaky && connStatus.fixed && connStatus.sliding && connStatus.swc;
         statusEl.className = 'status ' + (all ? 'connected' : 'disconnected');
         statusEl.textContent = all ? 'connected' : 'disconnected';
     }
@@ -605,6 +703,148 @@
         setTimeout(() => { renderSlidingStage(); scheduleNextSlidingTick(); }, delay);
     }
     scheduleNextSlidingTick();
+
+    // ------- Sliding Window Counter -------
+    const swcPrevBarEl = document.getElementById('swc-prev-bar');
+    const swcCurrBarEl = document.getElementById('swc-curr-bar');
+    const swcPrevCountEl = document.getElementById('swc-prev-count');
+    const swcCurrCountEl = document.getElementById('swc-curr-count');
+    const swcSlideEl = document.getElementById('swc-slide');
+    const swcNowEl = document.getElementById('swc-now');
+    const swcNowLabelEl = document.getElementById('swc-now-label');
+    const swcBottomAxisEl = document.getElementById('swc-bottom-axis');
+    const swcPrevNumEl = document.getElementById('swc-prev-num');
+    const swcCurrNumEl = document.getElementById('swc-curr-num');
+    const swcWeightNumEl = document.getElementById('swc-weight-num');
+    const swcWeightedNumEl = document.getElementById('swc-weighted-num');
+    const swcVerdictEl = document.getElementById('swc-verdict');
+    const swcLogEl = document.getElementById('swc-log');
+    const swcBtnEl = document.getElementById('swc-btn');
+
+    // 두 윈도(prev + curr) 각각 SWC_BAR_CELLS 셀로 채움
+    function buildSwcBar(barEl) {
+        barEl.innerHTML = '';
+        for (let i = 0; i < SWC_BAR_CELLS; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            barEl.appendChild(cell);
+        }
+    }
+    buildSwcBar(swcPrevBarEl);
+    buildSwcBar(swcCurrBarEl);
+
+    function renderSwcBar(barEl, count) {
+        const cells = barEl.querySelectorAll('.cell');
+        cells.forEach((c, i) => c.classList.toggle('filled', i < Math.min(count, SWC_BAR_CELLS)));
+    }
+
+    // 하단 시간축: -W ~ 0 ~ +W (prev 시작 / curr 시작 / curr 끝)
+    (function buildSwcBottomAxis() {
+        const ticks = [
+            { pos: 0, label: '-' + SWC_WINDOW_SECONDS + 's', cls: '' },
+            { pos: 50, label: 'window boundary', cls: 'boundary' },
+            { pos: 100, label: '+' + SWC_WINDOW_SECONDS + 's', cls: '' },
+        ];
+        ticks.forEach(t => {
+            const el = document.createElement('span');
+            el.className = 'tick ' + t.cls;
+            el.style.left = t.pos + '%';
+            el.textContent = t.label;
+            swcBottomAxisEl.appendChild(el);
+        });
+    })();
+
+    // 마지막 서버 상태 — tick에서 시각만 갱신해 now/slide 위치 부드럽게
+    let swcState = {
+        currWindowStart: 0,
+        prevCount: 0,
+        currCount: 0,
+        weighted: 0,
+        prevWeight: 1
+    };
+
+    function applySwcState(d) {
+        swcState.currWindowStart = d.currWindowStart;
+        swcState.prevCount = d.prevCount;
+        swcState.currCount = d.currCount;
+        swcState.weighted = d.weighted;
+        swcState.prevWeight = d.prevWeight;
+        renderSwcBar(swcPrevBarEl, d.prevCount);
+        renderSwcBar(swcCurrBarEl, d.currCount);
+        swcPrevCountEl.textContent = d.prevCount;
+        swcCurrCountEl.textContent = d.currCount;
+        swcPrevNumEl.textContent = d.prevCount;
+        swcCurrNumEl.textContent = d.currCount;
+        swcWeightNumEl.textContent = d.prevWeight.toFixed(2);
+        swcWeightedNumEl.textContent = d.weighted.toFixed(2);
+        // verdict는 "다음 요청이 들어오면" 통과 여부 — 즉 weighted < threshold면 다음 요청은 통과
+        const wouldAdmit = d.weighted < SWC_THRESHOLD;
+        swcVerdictEl.classList.toggle('ok', wouldAdmit);
+        swcVerdictEl.classList.toggle('ko', !wouldAdmit);
+        swcVerdictEl.textContent = wouldAdmit ? '다음 요청 통과' : '다음 요청 거부';
+    }
+
+    // 화면의 가로 시각 매핑: 좌측 0% = prev 시작, 50% = curr 시작, 100% = curr 끝
+    function tickSwc() {
+        const now = Date.now();
+        const elapsed = Math.max(0, Math.min(SWC_WINDOW_MS, now - swcState.currWindowStart));
+        const elapsedRatio = elapsed / SWC_WINDOW_MS;
+        // now 위치: curr 시작(50%) ~ curr 끝(100%)
+        const nowPct = 50 + elapsedRatio * 50;
+        // sliding window 시작: now - W = -W ~ curr 시작 (즉 0% ~ 50%)
+        const slideStartPct = elapsedRatio * 50;
+        // sliding window 끝: now (= nowPct)
+        const slideEndPct = nowPct;
+
+        swcNowEl.style.left = nowPct + '%';
+        swcNowLabelEl.textContent = 'now (' + (elapsedRatio * 100).toFixed(0) + '%)';
+        swcSlideEl.style.left = slideStartPct + '%';
+        swcSlideEl.style.width = (slideEndPct - slideStartPct) + '%';
+
+        // prevWeight도 클라이언트가 즉시 갱신 — 서버 tick(1s)보다 빠르게 부드럽게
+        const prevWeight = 1 - elapsedRatio;
+        const weighted = swcState.currCount + swcState.prevCount * prevWeight;
+        swcWeightNumEl.textContent = prevWeight.toFixed(2);
+        swcWeightedNumEl.textContent = weighted.toFixed(2);
+        const wouldAdmit = weighted < SWC_THRESHOLD;
+        swcVerdictEl.classList.toggle('ok', wouldAdmit);
+        swcVerdictEl.classList.toggle('ko', !wouldAdmit);
+        swcVerdictEl.textContent = wouldAdmit ? '다음 요청 통과' : '다음 요청 거부';
+    }
+
+    const swcSse = new EventSource('/api/sliding-counter/stream');
+    swcSse.addEventListener('open', () => { connStatus.swc = true; refreshStatus(); });
+    swcSse.addEventListener('error', () => { connStatus.swc = false; refreshStatus(); });
+
+    swcSse.addEventListener('init', e => {
+        const d = parseEvent(e); if (!d) return;
+        applySwcState(d); tickSwc();
+    });
+    swcSse.addEventListener('accepted', e => {
+        const d = parseEvent(e); if (!d) return;
+        applySwcState(d); tickSwc();
+        appendRow(swcLogEl,
+            '<span class="ok">200 OK</span>  weighted=' + d.weighted.toFixed(2) +
+            '  (curr=' + d.currCount + ' + prev=' + d.prevCount + '×' + d.prevWeight.toFixed(2) + ')');
+    });
+    swcSse.addEventListener('rejected', e => {
+        const d = parseEvent(e); if (!d) return;
+        applySwcState(d); tickSwc();
+        appendRow(swcLogEl,
+            '<span class="ko">429 Rejected</span>  weighted=' + d.weighted.toFixed(2) +
+            '  ≥ ' + d.threshold + '  (curr=' + d.currCount + ' + prev=' + d.prevCount + '×' + d.prevWeight.toFixed(2) + ')');
+    });
+    swcSse.addEventListener('tick', e => {
+        const d = parseEvent(e); if (!d) return;
+        applySwcState(d); tickSwc();
+    });
+
+    swcBtnEl.addEventListener('click', () => {
+        fetch('/api/sliding-counter/ping').catch(err => console.warn('sliding-counter fetch failed', err));
+    });
+
+    // 100ms 마다 now/slide 위치 갱신 (서버 tick은 1s 단위라 너무 끊김)
+    setInterval(tickSwc, 100);
 </script>
 </body>
 </html>

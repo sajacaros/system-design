@@ -4,6 +4,8 @@ import kr.study.fixedwindow.config.FixedWindowConfig;
 import kr.study.fixedwindow.ratelimit.FixedWindowRateLimiter;
 import kr.study.leakybucket.config.LeakyBucketConfig;
 import kr.study.leakybucket.ratelimit.LeakyRateLimiter;
+import kr.study.slidingwindowcounter.config.SlidingWindowCounterConfig;
+import kr.study.slidingwindowcounter.ratelimit.SlidingWindowCounterRateLimiter;
 import kr.study.slidingwindowlog.config.SlidingWindowLogConfig;
 import kr.study.slidingwindowlog.ratelimit.SlidingWindowLogRateLimiter;
 import kr.study.tokenbucket.config.TokenBucketConfig;
@@ -19,15 +21,18 @@ public class HomeController {
     private final LeakyRateLimiter leakyLimiter;
     private final FixedWindowRateLimiter fixedLimiter;
     private final SlidingWindowLogRateLimiter slidingLogLimiter;
+    private final SlidingWindowCounterRateLimiter slidingCounterLimiter;
 
     public HomeController(RateLimiter tokenLimiter,
                           LeakyRateLimiter leakyLimiter,
                           FixedWindowRateLimiter fixedLimiter,
-                          SlidingWindowLogRateLimiter slidingLogLimiter) {
+                          SlidingWindowLogRateLimiter slidingLogLimiter,
+                          SlidingWindowCounterRateLimiter slidingCounterLimiter) {
         this.tokenLimiter = tokenLimiter;
         this.leakyLimiter = leakyLimiter;
         this.fixedLimiter = fixedLimiter;
         this.slidingLogLimiter = slidingLogLimiter;
+        this.slidingCounterLimiter = slidingCounterLimiter;
     }
 
     @GetMapping("/")
@@ -40,6 +45,8 @@ public class HomeController {
         model.addAttribute("fixedWindowSeconds", FixedWindowConfig.WINDOW_SECONDS);
         model.addAttribute("slidingThreshold", slidingLogLimiter.threshold());
         model.addAttribute("slidingWindowSeconds", SlidingWindowLogConfig.WINDOW_SECONDS);
+        model.addAttribute("slidingCounterThreshold", slidingCounterLimiter.threshold());
+        model.addAttribute("slidingCounterWindowSeconds", SlidingWindowCounterConfig.WINDOW_SECONDS);
         return "index";
     }
 }
