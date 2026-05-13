@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit *)",
+      "Bash(iconv -f UTF-16LE -t UTF-8 README.md)",
+      "Bash(find [0-9][0-9]_*/images -mindepth 2 -type d)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('grafana/dashboards/monitoring-demo.json'\\)\\); print\\('dashboard JSON: OK'\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(docker info *)",
+      "Bash(iconv -f UTF-16LE -t UTF-8 /home/sajacaros/workspace/system-design/README.md)",
+      "Bash(java -version)",
+      "Bash(python3 *)",
+      "Bash(./gradlew test *)",
+      "Bash(./gradlew build *)",
+      "Bash(./gradlew compileJava --console=plain)",
+      "Bash(./gradlew compileJava compileTestJava --no-daemon)",
+      "Bash(./gradlew bootRun --no-daemon)",
+      "Bash(tee /tmp/swc-boot.log)",
+      "Bash(curl -fsS http://localhost:8080/ -o /dev/null)",
+      "Bash(curl -sS http://localhost:8080/)",
+      "Bash(curl -sS -X POST http://localhost:8080/actuator/shutdown)",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs -r kill)"
+    ]
+  }
+}
