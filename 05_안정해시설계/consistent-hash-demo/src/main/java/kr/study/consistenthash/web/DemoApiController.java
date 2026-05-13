@@ -1,7 +1,7 @@
 package kr.study.consistenthash.web;
 
-import kr.study.consistenthash.domain.ConsistentHashDemoService;
 import java.util.Map;
+import kr.study.consistenthash.domain.ConsistentHashDemoService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,10 +20,9 @@ public class DemoApiController {
 
     @GetMapping("/dashboard")
     public ConsistentHashDemoService.DashboardState dashboard(
-        @RequestParam(defaultValue = "6") int moduloServers,
-        @RequestParam(defaultValue = "32") int replicas
+        @RequestParam(defaultValue = "1") int moduloServers
     ) {
-        return demoService.dashboard(moduloServers, replicas);
+        return demoService.dashboard(moduloServers);
     }
 
     @GetMapping("/modulo")
@@ -46,29 +45,49 @@ public class DemoApiController {
         return demoService.resetModulo();
     }
 
-    @GetMapping("/ring")
-    public ConsistentHashDemoService.RingScenario ring() {
-        return demoService.steadyRing();
+    @GetMapping("/hashring")
+    public ConsistentHashDemoService.HashRingScenario hashRing() {
+        return demoService.hashRing();
     }
 
-    @GetMapping("/node-change")
-    public ConsistentHashDemoService.RingScenario nodeChange() {
-        return demoService.nodeScenario();
+    @PostMapping("/hashring/keys")
+    public ConsistentHashDemoService.HashRingScenario addHashRingKey() {
+        return demoService.addHashRingKey();
     }
 
-    @PostMapping("/node-change/add")
-    public ConsistentHashDemoService.RingScenario addNode() {
-        return demoService.addNodeToCluster();
+    @PostMapping("/hashring/reset")
+    public ConsistentHashDemoService.HashRingScenario resetHashRing() {
+        return demoService.resetHashRing();
     }
 
-    @PostMapping("/node-change/toggle")
-    public ConsistentHashDemoService.RingScenario toggleNode(@RequestParam String serverId) {
-        return demoService.toggleNodeInCluster(serverId);
+    @PostMapping("/hashring/servers/toggle")
+    public ConsistentHashDemoService.HashRingScenario toggleHashRingServer(@RequestParam String serverId) {
+        return demoService.toggleHashRingServer(serverId);
     }
 
     @GetMapping("/virtual")
-    public ConsistentHashDemoService.VirtualScenario virtualNodes(@RequestParam(defaultValue = "32") int replicas) {
-        return demoService.virtualNodes(replicas);
+    public ConsistentHashDemoService.VirtualNodesScenario virtualNodes() {
+        return demoService.virtualNodes();
+    }
+
+    @PostMapping("/virtual/keys")
+    public ConsistentHashDemoService.VirtualNodesScenario addVirtualNodeKey() {
+        return demoService.addVirtualNodeKey();
+    }
+
+    @PostMapping("/virtual/replicas")
+    public ConsistentHashDemoService.VirtualNodesScenario updateVirtualReplicas(@RequestParam int replicas) {
+        return demoService.updateVirtualReplicas(replicas);
+    }
+
+    @PostMapping("/virtual/servers/toggle")
+    public ConsistentHashDemoService.VirtualNodesScenario toggleVirtualNodeServer(@RequestParam String serverId) {
+        return demoService.toggleVirtualNodeServer(serverId);
+    }
+
+    @PostMapping("/virtual/reset")
+    public ConsistentHashDemoService.VirtualNodesScenario resetVirtualNodes() {
+        return demoService.resetVirtualNodes();
     }
 
     @GetMapping("/health")
