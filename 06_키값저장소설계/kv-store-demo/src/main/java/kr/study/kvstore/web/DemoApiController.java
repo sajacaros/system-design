@@ -5,6 +5,7 @@ import kr.study.kvstore.domain.ClusterNodeService.AvailabilityCommand;
 import kr.study.kvstore.domain.ClusterNodeService.AvailabilityResult;
 import kr.study.kvstore.domain.ClusterNodeService.ClusterSnapshot;
 import kr.study.kvstore.domain.ClusterNodeService.GossipResult;
+import kr.study.kvstore.domain.ClusterNodeService.HintedHandoffResult;
 import kr.study.kvstore.domain.ClusterNodeService.PutCommand;
 import kr.study.kvstore.domain.ClusterNodeService.PutResult;
 import kr.study.kvstore.domain.ClusterNodeService.QuorumSettingsCommand;
@@ -68,5 +69,10 @@ public class DemoApiController {
     @PostMapping("/quorum")
     public QuorumSettingsResult quorum(@RequestBody QuorumSettingsCommand command) {
         return clusterNodeService.setClusterQuorum(command);
+    }
+
+    @PostMapping("/handoff")
+    public HintedHandoffResult hintedHandoff() {
+        return clusterNodeService.runClusterHintedHandoff();
     }
 }

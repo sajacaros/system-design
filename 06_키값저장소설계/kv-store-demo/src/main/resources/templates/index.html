@@ -121,6 +121,34 @@
         font-weight: 700;
       }
 
+      .tabs {
+        display: flex;
+        gap: 6px;
+        margin-top: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .tab {
+        min-height: 34px;
+        border-bottom-color: transparent;
+        border-radius: 6px 6px 0 0;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .tab.active {
+        color: var(--blue);
+        background: var(--soft);
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
       .layout {
         display: grid;
         gap: 12px;
@@ -153,6 +181,10 @@
         gap: 10px;
         align-items: end;
         padding: 12px;
+      }
+
+      .sync-body {
+        grid-template-columns: minmax(260px, 0.9fr) auto minmax(340px, 1.1fr);
       }
 
       .field-row {
@@ -321,6 +353,25 @@
         font-size: 11px;
       }
 
+      .hint-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .hint-item {
+        padding: 7px;
+        border: 1px solid rgba(130, 80, 223, 0.22);
+        border-radius: 8px;
+        background: #fbf7ff;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .hint-item strong {
+        color: var(--violet);
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -420,7 +471,8 @@
 
       @media (max-width: 980px) {
         .masthead,
-        .panel-body {
+        .panel-body,
+        .sync-body {
           grid-template-columns: 1fr;
         }
       }
@@ -447,61 +499,106 @@
         <span id="status" class="status">loading</span>
       </header>
 
-      <div class="layout">
-        <aside class="panel">
-          <div class="panel-head">
-            <h2>클라이언트 요청</h2>
-            <p><code>PUT</code>은 write quorum, <code>GET</code>은 read quorum을 통과하는지 보여줍니다.</p>
-          </div>
-          <div class="panel-body">
-            <div class="field-row">
-              <label>
-                <span class="empty">key</span>
-                <input id="key-input" value="cart:42" />
-              </label>
-              <label>
-                <span class="empty">value</span>
-                <input id="value-input" value="book" />
-              </label>
-              <label>
-                <span class="empty">중재자 노드 (coordinator)</span>
-                <select id="target-node-select"></select>
-              </label>
-            </div>
-            <div class="quorum-controls">
-              <label>
-                <span class="empty">consistency preset</span>
-                <select id="quorum-preset-select">
-                  <option value="3:2">Balanced AP W=3 R=2</option>
-                  <option value="3:3">Overlap W=3 R=3</option>
-                  <option value="4:2">Write-heavy W=4 R=2</option>
-                  <option value="5:1">Fast read W=5 R=1</option>
-                  <option value="1:5">Fast write W=1 R=5</option>
-                  <option value="custom">Custom W/R</option>
-                </select>
-              </label>
-              <label>
-                <span class="empty">W</span>
-                <select id="write-quorum-select"></select>
-              </label>
-              <label>
-                <span class="empty">R</span>
-                <select id="read-quorum-select"></select>
-              </label>
-            </div>
-            <div class="actions">
-              <button id="put-button" class="primary" type="button">PUT</button>
-              <button id="get-button" type="button">GET</button>
-            </div>
-            <div id="result" class="result">요청 결과가 여기에 표시됩니다.</div>
-          </div>
-        </aside>
+      <nav class="tabs" aria-label="demo tabs">
+        <button class="tab active" type="button" data-tab="request">요청 / 정족수</button>
+        <button class="tab" type="button" data-tab="sync">데이터 동기화</button>
+      </nav>
 
-        <section>
-          <div id="cluster-meta" class="cluster-meta"></div>
-          <div id="node-grid" class="node-grid"></div>
-        </section>
-      </div>
+      <section class="tab-panel active" data-panel="request">
+        <div class="layout">
+          <aside class="panel">
+            <div class="panel-head">
+              <h2>클라이언트 요청</h2>
+              <p><code>PUT</code>은 write quorum, <code>GET</code>은 read quorum을 통과하는지 보여줍니다.</p>
+            </div>
+            <div class="panel-body">
+              <div class="field-row">
+                <label>
+                  <span class="empty">key</span>
+                  <input id="key-input" value="cart:42" />
+                </label>
+                <label>
+                  <span class="empty">value</span>
+                  <input id="value-input" value="book" />
+                </label>
+                <label>
+                  <span class="empty">중재자 노드 (coordinator)</span>
+                  <select id="target-node-select"></select>
+                </label>
+              </div>
+              <div class="quorum-controls">
+                <label>
+                  <span class="empty">consistency preset</span>
+                  <select id="quorum-preset-select">
+                    <option value="3:2">Balanced AP W=3 R=2</option>
+                    <option value="3:3">Overlap W=3 R=3</option>
+                    <option value="4:2">Write-heavy W=4 R=2</option>
+                    <option value="5:1">Fast read W=5 R=1</option>
+                    <option value="1:5">Fast write W=1 R=5</option>
+                    <option value="custom">Custom W/R</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="empty">W</span>
+                  <select id="write-quorum-select"></select>
+                </label>
+                <label>
+                  <span class="empty">R</span>
+                  <select id="read-quorum-select"></select>
+                </label>
+              </div>
+              <div class="actions">
+                <button id="put-button" class="primary" type="button">PUT</button>
+                <button id="get-button" type="button">GET</button>
+              </div>
+              <div id="result" class="result">요청 결과가 여기에 표시됩니다.</div>
+            </div>
+          </aside>
+
+          <section>
+            <div id="cluster-meta" class="cluster-meta"></div>
+            <div id="node-grid" class="node-grid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" data-panel="sync">
+        <div class="layout">
+          <aside class="panel">
+            <div class="panel-head">
+              <h2>Sloppy Quorum / Hinted Handoff</h2>
+              <p>장애 중 실패한 replica write는 coordinator가 hint로 보관하고, 복구 후 자동으로 원래 노드에 전달합니다.</p>
+            </div>
+            <div class="panel-body sync-body">
+              <div class="field-row">
+                <label>
+                  <span class="empty">key</span>
+                  <input id="sync-key-input" value="cart:42" />
+                </label>
+                <label>
+                  <span class="empty">value</span>
+                  <input id="sync-value-input" value="book,pen" />
+                </label>
+                <label>
+                  <span class="empty">중재자 노드 (coordinator)</span>
+                  <select id="sync-target-node-select"></select>
+                </label>
+              </div>
+              <div class="actions">
+                <button id="sync-put-button" class="primary" type="button">PUT</button>
+                <button id="sync-get-button" type="button">GET</button>
+                <button id="handoff-button" type="button">Hinted Handoff 수동 실행</button>
+              </div>
+              <div id="sync-result" class="result">pending hint가 여기에 표시됩니다.</div>
+            </div>
+          </aside>
+
+          <section>
+            <div id="sync-cluster-meta" class="cluster-meta"></div>
+            <div id="sync-node-grid" class="node-grid"></div>
+          </section>
+        </div>
+      </section>
     </main>
 
     <script>
@@ -509,20 +606,44 @@
         snapshot: null,
         selectedKey: "cart:42",
         targetNodeId: "A",
+        activeTab: "request",
         quorumUpdateInFlight: false,
       };
 
       document.addEventListener("DOMContentLoaded", () => {
+        bindTabs();
         bindControls();
         refresh();
         window.setInterval(refresh, 2500);
       });
 
+      function bindTabs() {
+        document.querySelectorAll("[data-tab]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.activeTab = button.dataset.tab;
+            document.querySelectorAll("[data-tab]").forEach((tab) => {
+              tab.classList.toggle("active", tab.dataset.tab === state.activeTab);
+            });
+            document.querySelectorAll("[data-panel]").forEach((panel) => {
+              panel.classList.toggle("active", panel.dataset.panel === state.activeTab);
+            });
+          });
+        });
+      }
+
       function bindControls() {
         document.getElementById("put-button").addEventListener("click", putValue);
         document.getElementById("get-button").addEventListener("click", getValue);
+        document.getElementById("sync-put-button").addEventListener("click", syncPutValue);
+        document.getElementById("sync-get-button").addEventListener("click", syncGetValue);
+        document.getElementById("handoff-button").addEventListener("click", runHintedHandoff);
         document.getElementById("target-node-select").addEventListener("change", (event) => {
           state.targetNodeId = event.target.value;
+          document.getElementById("sync-target-node-select").value = state.targetNodeId;
+        });
+        document.getElementById("sync-target-node-select").addEventListener("change", (event) => {
+          state.targetNodeId = event.target.value;
+          document.getElementById("target-node-select").value = state.targetNodeId;
         });
         document.getElementById("quorum-preset-select").addEventListener("change", async (event) => {
           if (event.target.value === "custom") {
@@ -539,6 +660,12 @@
         });
         document.getElementById("key-input").addEventListener("input", (event) => {
           state.selectedKey = event.target.value.trim();
+          document.getElementById("sync-key-input").value = event.target.value;
+          render();
+        });
+        document.getElementById("sync-key-input").addEventListener("input", (event) => {
+          state.selectedKey = event.target.value.trim();
+          document.getElementById("key-input").value = event.target.value;
           render();
         });
       }
@@ -575,6 +702,33 @@
         await refresh();
       }
 
+      async function syncPutValue() {
+        const key = document.getElementById("sync-key-input").value.trim();
+        const value = document.getElementById("sync-value-input").value.trim();
+        state.selectedKey = key;
+        document.getElementById("key-input").value = key;
+        const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, value }),
+        });
+        const message = formatPutResult(result);
+        await refresh();
+        showResult(message);
+        showSyncResult(message);
+      }
+
+      async function syncGetValue() {
+        const key = document.getElementById("sync-key-input").value.trim();
+        state.selectedKey = key;
+        document.getElementById("key-input").value = key;
+        const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv/${encodeURIComponent(key)}`);
+        const message = formatReadResult(result);
+        await refresh();
+        showResult(message);
+        showSyncResult(message);
+      }
+
       async function toggleNode(nodeId, available) {
         const result = await fetchJson(`/api/nodes/${encodeURIComponent(nodeId)}/availability`, {
           method: "POST",
@@ -608,6 +762,14 @@
         }
       }
 
+      async function runHintedHandoff() {
+        const result = await fetchJson("/api/handoff", { method: "POST" });
+        const message = formatHandoffResult(result);
+        await refresh();
+        showResult(message);
+        showSyncResult(message);
+      }
+
       async function fetchJson(url, options = {}) {
         const response = await fetch(url, options);
         if (!response.ok) {
@@ -623,16 +785,23 @@
         }
         renderTargetOptions();
         renderQuorumControls();
+        const nodes = state.snapshot.nodes.sort((left, right) => left.nodeId.localeCompare(right.nodeId));
         document.getElementById("cluster-meta").innerHTML = [
           metric("coordinator", state.snapshot.coordinatorNodeId),
           metric("write quorum", `${state.snapshot.writeQuorum}/${state.snapshot.replicationFactor}`),
           metric("read quorum", `${state.snapshot.readQuorum}/${state.snapshot.replicationFactor}`),
           metric("consistency", state.snapshot.writeQuorum + state.snapshot.readQuorum > state.snapshot.replicationFactor ? "overlap" : "stale possible"),
         ].join("");
-        document.getElementById("node-grid").innerHTML = state.snapshot.nodes
-          .sort((left, right) => left.nodeId.localeCompare(right.nodeId))
-          .map(renderNode)
-          .join("");
+        document.getElementById("sync-cluster-meta").innerHTML = [
+          metric("coordinator", state.snapshot.coordinatorNodeId),
+          metric("pending hints", countPendingHints(nodes)),
+          metric("quorum", `W${state.snapshot.writeQuorum} / R${state.snapshot.readQuorum}`),
+          metric("sync", countPendingHints(nodes) === 0 ? "clean" : "handoff needed"),
+        ].join("");
+        const nodeHtml = nodes.map(renderNode).join("");
+        document.getElementById("node-grid").innerHTML = nodeHtml;
+        document.getElementById("sync-node-grid").innerHTML = nodeHtml;
+        renderPendingHints(nodes);
       }
 
       function renderQuorumControls() {
@@ -653,18 +822,22 @@
       }
 
       function renderTargetOptions() {
-        const select = document.getElementById("target-node-select");
+        const requestSelect = document.getElementById("target-node-select");
+        const syncSelect = document.getElementById("sync-target-node-select");
         const nodeIds = state.snapshot.nodes.map((node) => node.nodeId).sort();
         if (!nodeIds.includes(state.targetNodeId)) {
           state.targetNodeId = state.snapshot.coordinatorNodeId;
         }
-        select.innerHTML = nodeIds
+        const options = nodeIds
           .map((nodeId) => `<option value="${escapeHtml(nodeId)}" ${nodeId === state.targetNodeId ? "selected" : ""}>${escapeHtml(nodeId)} 중재자</option>`)
           .join("");
+        requestSelect.innerHTML = options;
+        syncSelect.innerHTML = options;
       }
 
       function renderNode(node) {
         const selectedVersions = node.store[state.selectedKey] || [];
+        const hints = node.hints || [];
         const availabilityClass = node.available ? "ok" : "paused";
         const availabilityText = node.available ? "AVAILABLE" : "PAUSED";
         return `
@@ -685,6 +858,10 @@
                 ${selectedVersions.length === 0 ? '<p class="empty">이 key의 값이 없습니다.</p>' : selectedVersions.map(renderVersion).join("")}
               </div>
               <div>
+                <div class="section-title"><h3>pending hints</h3><span class="badge ${hints.length === 0 ? "ok" : "paused"}">${hints.length}</span></div>
+                ${renderNodeHints(hints)}
+              </div>
+              <div>
                 <div class="section-title"><h3>membership</h3></div>
                 ${renderMembership(node.membership)}
               </div>
@@ -694,6 +871,30 @@
               </div>
             </div>
           </article>
+        `;
+      }
+
+      function renderPendingHints(nodes) {
+        const hints = nodes.flatMap((node) => (node.hints || []).map((hint) => ({ ...hint, holderNodeId: node.nodeId })));
+        const content = hints.length === 0
+          ? "pending hint 없음"
+          : hints.map((hint) => `${hint.holderNodeId} -> ${hint.targetNodeId}: ${hint.key}=${hint.value} (${hint.versionId})`).join("\n");
+        showSyncResult(content);
+      }
+
+      function renderNodeHints(hints) {
+        if (hints.length === 0) {
+          return '<p class="empty">pending hint 없음</p>';
+        }
+        return `
+          <div class="hint-list">
+            ${hints.map((hint) => `
+              <div class="hint-item">
+                <strong>to ${escapeHtml(hint.targetNodeId)}</strong>
+                ${escapeHtml(hint.key)}=${escapeHtml(hint.value)} <code>${escapeHtml(hint.versionId)}</code>
+              </div>
+            `).join("")}
+          </div>
         `;
       }
 
@@ -730,7 +931,7 @@
       function formatPutResult(result) {
         const acks = result.acks.map((ack) => `${ack.nodeId}: ${ack.ok ? "ack" : "fail"} (${ack.message})`).join("\n");
         return [
-          `PUT through 중재자 노드 ${state.targetNodeId} ${result.key}=${result.version.value}`,
+          `PUT through ${coordinatorLabel(result)} ${result.key}=${result.version.value}`,
           `version ${result.version.versionId} clock ${formatClock(result.version.clock.entries)}`,
           `write quorum ${result.ackCount}/${result.requiredAckCount}: ${result.quorumReached ? "reached" : "failed"}`,
           acks,
@@ -743,7 +944,7 @@
           : result.versions.map((version) => `${version.versionId}: ${version.value} ${formatClock(version.clock.entries)}`).join("\n");
         const reads = result.reads.map((read) => `${read.nodeId}: ${read.ok ? "ok" : "fail"} (${read.message})`).join("\n");
         return [
-          `GET through 중재자 노드 ${state.targetNodeId} ${result.key}`,
+          `GET through ${coordinatorLabel(result)} ${result.key}`,
           `read quorum ${result.readCount}/${result.requiredReadCount}: ${result.quorumReached ? "reached" : "failed"}`,
           `conflict: ${result.conflict}`,
           "versions:",
@@ -753,8 +954,36 @@
         ].join("\n");
       }
 
+      function coordinatorLabel(result) {
+        const requested = result.requestedCoordinatorNodeId || state.targetNodeId;
+        const actual = result.coordinatorNodeId || state.targetNodeId;
+        if (result.coordinatorFallback || requested !== actual) {
+          return `중재자 노드 ${requested} -> ${actual} fallback`;
+        }
+        return `중재자 노드 ${actual}`;
+      }
+
+      function formatHandoffResult(result) {
+        const deliveries = result.deliveries.length === 0
+          ? "no pending hints"
+          : result.deliveries.map((delivery) =>
+            `${delivery.holderNodeId} -> ${delivery.targetNodeId}: ${delivery.delivered ? "delivered" : "pending"} ${delivery.key}=${delivery.value} (${delivery.message})`
+          ).join("\n");
+        const nodes = result.nodes.map((node) => `${node.nodeId}: ${node.ok ? "ok" : "fail"} (${node.message})`).join("\n");
+        return [
+          "Hinted Handoff",
+          deliveries,
+          "nodes:",
+          nodes,
+        ].join("\n");
+      }
+
       function metric(label, value) {
         return `<section class="metric"><strong>${label}</strong><span>${escapeHtml(String(value))}</span></section>`;
+      }
+
+      function countPendingHints(nodes) {
+        return nodes.reduce((sum, node) => sum + (node.hints || []).length, 0);
       }
 
       function formatClock(entries) {
@@ -763,6 +992,10 @@
 
       function showResult(message) {
         document.getElementById("result").textContent = message;
+      }
+
+      function showSyncResult(message) {
+        document.getElementById("sync-result").textContent = message;
       }
 
       function setStatus(kind, label) {

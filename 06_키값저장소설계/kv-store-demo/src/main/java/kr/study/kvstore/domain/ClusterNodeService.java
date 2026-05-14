@@ -29,6 +29,7 @@ public class ClusterNodeService {
     private final String nodeId;
     private final Map<String, Peer> peersByNodeId;
     private final Map<String, List<VersionedValue>> store = new ConcurrentHashMap<>();
+    private final Map<String, List<HintedHandoff>> pendingHints = new ConcurrentHashMap<>();
     private final Map<String, MembershipEntry> membership = new ConcurrentHashMap<>();
     private final ArrayDeque<String> events = new ArrayDeque<>();
     private final AtomicInteger heartbeat = new AtomicInteger();
@@ -76,6 +77,14 @@ public class ClusterNodeService {
         }
     }
 
+    @Scheduled(fixedDelay = 2000, initialDelay = 1500)
+    public void automaticHintedHandoff() {
+        if (!available || pendingHints.isEmpty()) {
+            return;
+        }
+        deliverLocalHints();
+    }
+
     public PutResult put(PutCommand command) {
         requireAvailable();
         VectorClock baseClock = siblings(command.key()).stream()
@@ -106,6 +115,7 @@ public class ClusterNodeService {
                 markPeerAlive(peer.nodeId());
             } catch (RestClientException exception) {
                 acks.add(new ReplicaAck(peer.nodeId(), false, "unreachable"));
+                addHint(peer.nodeId(), version);
                 markPeerSuspect(peer.nodeId());
             }
         }
@@ -113,7 +123,7 @@ public class ClusterNodeService {
         int requiredWriteQuorum = writeQuorum;
         boolean quorumReached = ackCount >= requiredWriteQuorum;
         log("PUT " + command.key() + "=" + command.value() + " -> " + ackCount + "/" + requiredWriteQuorum + " write quorum");
-        return new PutResult(command.key(), version, ackCount, requiredWriteQuorum, quorumReached, acks);
+        return new PutResult(command.key(), version, ackCount, requiredWriteQuorum, quorumReached, acks, nodeId, nodeId, false);
     }
 
     public PutResult putOnNode(String targetNodeId, PutCommand command) {
@@ -124,11 +134,19 @@ public class ClusterNodeService {
         if (peer == null) {
             throw new IllegalArgumentException("unknown node: " + targetNodeId);
         }
-        return Objects.requireNonNull(restTemplate.postForEntity(
-            peer.endpoint() + "/api/kv",
-            command,
-            PutResult.class
-        ).getBody());
+        try {
+            PutResult result = Objects.requireNonNull(restTemplate.postForEntity(
+                peer.endpoint() + "/api/kv",
+                command,
+                PutResult.class
+            ).getBody());
+            markPeerAlive(targetNodeId);
+            return result.withRequestedCoordinator(targetNodeId, false);
+        } catch (RestClientException exception) {
+            markPeerSuspect(targetNodeId);
+            log("coordinator " + targetNodeId + " unavailable, fallback to " + nodeId);
+            return put(command).withRequestedCoordinator(targetNodeId, true);
+        }
     }
 
     public ReadResult get(String key) {
@@ -161,7 +179,7 @@ public class ClusterNodeService {
         boolean quorumReached = successfulReads >= requiredReadQuorum;
         boolean conflict = hasConflict(reconciled);
         log("GET " + key + " -> " + successfulReads + "/" + requiredReadQuorum + " read quorum, versions " + reconciled.size());
-        return new ReadResult(key, reconciled, reads, (int) successfulReads, requiredReadQuorum, quorumReached, conflict);
+        return new ReadResult(key, reconciled, reads, (int) successfulReads, requiredReadQuorum, quorumReached, conflict, nodeId, nodeId, false);
     }
 
     public ReadResult getFromNode(String targetNodeId, String key) {
@@ -173,10 +191,18 @@ public class ClusterNodeService {
             throw new IllegalArgumentException("unknown node: " + targetNodeId);
         }
         String encodedKey = UriUtils.encodePathSegment(key, java.nio.charset.StandardCharsets.UTF_8);
-        return Objects.requireNonNull(restTemplate.getForEntity(
-            peer.endpoint() + "/api/kv/" + encodedKey,
-            ReadResult.class
-        ).getBody());
+        try {
+            ReadResult result = Objects.requireNonNull(restTemplate.getForEntity(
+                peer.endpoint() + "/api/kv/" + encodedKey,
+                ReadResult.class
+            ).getBody());
+            markPeerAlive(targetNodeId);
+            return result.withRequestedCoordinator(targetNodeId, false);
+        } catch (RestClientException exception) {
+            markPeerSuspect(targetNodeId);
+            log("coordinator " + targetNodeId + " unavailable, fallback to " + nodeId);
+            return get(key).withRequestedCoordinator(targetNodeId, true);
+        }
     }
 
     public boolean saveReplica(ReplicaWriteRequest request) {
@@ -297,12 +323,52 @@ public class ClusterNodeService {
         return new QuorumSettings(properties.replicationFactor(), nextWriteQuorum, nextReadQuorum);
     }
 
+    public HintedHandoffResult runClusterHintedHandoff() {
+        requireAvailable();
+        List<HintDelivery> deliveries = new ArrayList<>();
+        List<ReplicaAck> nodes = new ArrayList<>();
+        HintedHandoffResult localResult = runLocalHintedHandoff();
+        deliveries.addAll(localResult.deliveries());
+        nodes.add(new ReplicaAck(nodeId, true, "local handoff checked"));
+        for (Peer peer : peersByNodeId.values()) {
+            try {
+                HintedHandoffResult response = restTemplate.postForEntity(
+                    peer.endpoint() + "/internal/admin/handoff",
+                    null,
+                    HintedHandoffResult.class
+                ).getBody();
+                if (response != null) {
+                    deliveries.addAll(response.deliveries());
+                }
+                nodes.add(new ReplicaAck(peer.nodeId(), true, "remote handoff checked"));
+                markPeerAlive(peer.nodeId());
+            } catch (RestClientException exception) {
+                nodes.add(new ReplicaAck(peer.nodeId(), false, "remote node unreachable"));
+                markPeerSuspect(peer.nodeId());
+            }
+        }
+        log("cluster hinted handoff -> " + deliveries.stream().filter(HintDelivery::delivered).count() + " delivered");
+        return new HintedHandoffResult(List.copyOf(deliveries), List.copyOf(nodes));
+    }
+
+    public HintedHandoffResult runLocalHintedHandoff() {
+        requireAvailable();
+        List<HintDelivery> deliveries = deliverLocalHints();
+        if (deliveries.isEmpty()) {
+            log("hinted handoff checked: no pending hints");
+        } else {
+            log("hinted handoff checked: " + deliveries.stream().filter(HintDelivery::delivered).count() + "/" + deliveries.size() + " delivered");
+        }
+        return new HintedHandoffResult(deliveries, List.of(new ReplicaAck(nodeId, true, "local handoff checked")));
+    }
+
     public NodeSnapshot localSnapshot() {
         return new NodeSnapshot(
             nodeId,
             "self",
             available,
             Map.copyOf(store),
+            hintSnapshot(),
             membershipSnapshot(),
             List.copyOf(events)
         );
@@ -329,6 +395,7 @@ public class ClusterNodeService {
                     peer.endpoint(),
                     false,
                     Map.of(),
+                    List.of(),
                     List.of(membership.getOrDefault(peer.nodeId(),
                         new MembershipEntry(peer.nodeId(), peer.endpoint(), 0, NodeStatus.SUSPECT, Instant.now()))),
                     List.of("snapshot unreachable")
@@ -392,6 +459,81 @@ public class ClusterNodeService {
         return peersByNodeId.values().stream()
             .limit(Math.max(0, readQuorum - 1L))
             .toList();
+    }
+
+    private void addHint(String targetNodeId, VersionedValue version) {
+        pendingHints.compute(targetNodeId, (ignored, current) -> {
+            List<HintedHandoff> next = current == null ? new ArrayList<>() : new ArrayList<>(current);
+            boolean alreadyQueued = next.stream()
+                .anyMatch(hint -> hint.version().versionId().equals(version.versionId()));
+            if (!alreadyQueued) {
+                next.add(new HintedHandoff(
+                    nodeId + "-hint-" + UUID.randomUUID().toString().substring(0, 8),
+                    targetNodeId,
+                    version,
+                    Instant.now()
+                ));
+            }
+            return List.copyOf(next);
+        });
+        log("hint stored for " + targetNodeId + " key " + version.key());
+    }
+
+    private List<HintDelivery> deliverLocalHints() {
+        List<HintDelivery> deliveries = new ArrayList<>();
+        for (Map.Entry<String, List<HintedHandoff>> entry : pendingHints.entrySet()) {
+            Peer target = peersByNodeId.get(entry.getKey());
+            if (target == null) {
+                for (HintedHandoff hint : entry.getValue()) {
+                    deliveries.add(delivery(hint, false, "unknown target"));
+                }
+                continue;
+            }
+
+            List<String> deliveredHintIds = new ArrayList<>();
+            for (HintedHandoff hint : entry.getValue()) {
+                try {
+                    restTemplate.postForEntity(
+                        target.endpoint() + "/internal/replica/write",
+                        new ReplicaWriteRequest(hint.version()),
+                        Void.class
+                    );
+                    deliveredHintIds.add(hint.hintId());
+                    deliveries.add(delivery(hint, true, "handed off"));
+                    markPeerAlive(target.nodeId());
+                } catch (RestClientException exception) {
+                    deliveries.add(delivery(hint, false, "target still unreachable"));
+                    markPeerSuspect(target.nodeId());
+                }
+            }
+            removeDeliveredHints(entry.getKey(), deliveredHintIds);
+        }
+        return List.copyOf(deliveries);
+    }
+
+    private HintDelivery delivery(HintedHandoff hint, boolean delivered, String message) {
+        VersionedValue version = hint.version();
+        return new HintDelivery(
+            nodeId,
+            hint.targetNodeId(),
+            version.key(),
+            version.value(),
+            version.versionId(),
+            delivered,
+            message
+        );
+    }
+
+    private void removeDeliveredHints(String targetNodeId, List<String> deliveredHintIds) {
+        if (deliveredHintIds.isEmpty()) {
+            return;
+        }
+        pendingHints.computeIfPresent(targetNodeId, (ignored, current) -> {
+            List<HintedHandoff> remaining = current.stream()
+                .filter(hint -> !deliveredHintIds.contains(hint.hintId()))
+                .toList();
+            return remaining.isEmpty() ? null : List.copyOf(remaining);
+        });
     }
 
     private void mergeMembership(List<MembershipEntry> incoming) {
@@ -466,6 +608,21 @@ public class ClusterNodeService {
             .toList();
     }
 
+    private List<HintSummary> hintSnapshot() {
+        return pendingHints.values().stream()
+            .flatMap(List::stream)
+            .sorted(Comparator.comparing(HintedHandoff::createdAt))
+            .map(hint -> new HintSummary(
+                hint.hintId(),
+                hint.targetNodeId(),
+                hint.version().key(),
+                hint.version().value(),
+                hint.version().versionId(),
+                hint.createdAt()
+            ))
+            .toList();
+    }
+
     private void requireAvailable() {
         if (!available) {
             throw new NodeUnavailableException(nodeId + " is paused");
@@ -516,6 +673,9 @@ public class ClusterNodeService {
     private record Peer(String nodeId, String endpoint) {
     }
 
+    private record HintedHandoff(String hintId, String targetNodeId, VersionedValue version, Instant createdAt) {
+    }
+
     public record PutCommand(String key, String value) {
     }
 
@@ -525,8 +685,25 @@ public class ClusterNodeService {
         int ackCount,
         int requiredAckCount,
         boolean quorumReached,
-        List<ReplicaAck> acks
+        List<ReplicaAck> acks,
+        String requestedCoordinatorNodeId,
+        String coordinatorNodeId,
+        boolean coordinatorFallback
     ) {
+
+        public PutResult withRequestedCoordinator(String nextRequestedCoordinatorNodeId, boolean nextCoordinatorFallback) {
+            return new PutResult(
+                key,
+                version,
+                ackCount,
+                requiredAckCount,
+                quorumReached,
+                acks,
+                nextRequestedCoordinatorNodeId,
+                coordinatorNodeId,
+                nextCoordinatorFallback
+            );
+        }
     }
 
     public record ReplicaAck(String nodeId, boolean ok, String message) {
@@ -539,8 +716,26 @@ public class ClusterNodeService {
         int readCount,
         int requiredReadCount,
         boolean quorumReached,
-        boolean conflict
+        boolean conflict,
+        String requestedCoordinatorNodeId,
+        String coordinatorNodeId,
+        boolean coordinatorFallback
     ) {
+
+        public ReadResult withRequestedCoordinator(String nextRequestedCoordinatorNodeId, boolean nextCoordinatorFallback) {
+            return new ReadResult(
+                key,
+                versions,
+                reads,
+                readCount,
+                requiredReadCount,
+                quorumReached,
+                conflict,
+                nextRequestedCoordinatorNodeId,
+                coordinatorNodeId,
+                nextCoordinatorFallback
+            );
+        }
     }
 
     public record ReplicaRead(String nodeId, boolean ok, List<VersionedValue> versions, String message) {
@@ -582,17 +777,42 @@ public class ClusterNodeService {
     ) {
     }
 
+    public record HintSummary(
+        String hintId,
+        String targetNodeId,
+        String key,
+        String value,
+        String versionId,
+        Instant createdAt
+    ) {
+    }
+
+    public record HintDelivery(
+        String holderNodeId,
+        String targetNodeId,
+        String key,
+        String value,
+        String versionId,
+        boolean delivered,
+        String message
+    ) {
+    }
+
+    public record HintedHandoffResult(List<HintDelivery> deliveries, List<ReplicaAck> nodes) {
+    }
+
     public record NodeSnapshot(
         String nodeId,
         String endpoint,
         boolean available,
         Map<String, List<VersionedValue>> store,
+        List<HintSummary> hints,
         List<MembershipEntry> membership,
         List<String> events
     ) {
 
         public NodeSnapshot withEndpoint(String nextEndpoint) {
-            return new NodeSnapshot(nodeId, nextEndpoint, available, store, membership, events);
+            return new NodeSnapshot(nodeId, nextEndpoint, available, store, hints, membership, events);
         }
     }
 

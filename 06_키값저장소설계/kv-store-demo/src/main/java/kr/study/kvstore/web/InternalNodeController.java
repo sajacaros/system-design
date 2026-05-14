@@ -3,6 +3,7 @@ package kr.study.kvstore.web;
 import kr.study.kvstore.domain.ClusterNodeService;
 import kr.study.kvstore.domain.ClusterNodeService.AvailabilityCommand;
 import kr.study.kvstore.domain.ClusterNodeService.GossipMessage;
+import kr.study.kvstore.domain.ClusterNodeService.HintedHandoffResult;
 import kr.study.kvstore.domain.ClusterNodeService.NodeSnapshot;
 import kr.study.kvstore.domain.ClusterNodeService.QuorumSettingsCommand;
 import kr.study.kvstore.domain.ClusterNodeService.ReplicaReadResponse;
@@ -47,6 +48,11 @@ public class InternalNodeController {
     @PostMapping("/admin/quorum")
     public void quorum(@RequestBody QuorumSettingsCommand command) {
         clusterNodeService.applyQuorum(command);
+    }
+
+    @PostMapping("/admin/handoff")
+    public HintedHandoffResult hintedHandoff() {
+        return clusterNodeService.runLocalHintedHandoff();
     }
 
     @GetMapping("/snapshot")

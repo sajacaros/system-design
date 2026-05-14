@@ -48,6 +48,17 @@ Open http://localhost:7906.
 
 Then switch the preset to `W=3, R=3` and repeat the read. Since `W + R > N`, the read quorum overlaps the successful write quorum.
 
+## Hinted Handoff Scenario
+
+1. Keep `W=3, R=2`.
+2. Pause nodes `D` and `E`.
+3. `PUT cart:42=book,pen` via node `A`.
+4. The write reaches quorum with `A`, `B`, and `C`; node `A` stores pending hints for `D` and `E`.
+5. Resume `D` and `E`.
+6. Open the `Data Sync` tab and watch the pending hints.
+7. The coordinator retries hinted handoff automatically, so the missed replicas catch up after a short delay.
+8. You can also run `Hinted Handoff` manually from the tab to force an immediate retry.
+
 ## Local Process Run
 
 Use five terminals:
