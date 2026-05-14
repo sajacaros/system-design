@@ -5,7 +5,7 @@ spring:
     cache: false
 
 server:
-  port: 8080
+  port: 7904
 
 logging:
   level:
