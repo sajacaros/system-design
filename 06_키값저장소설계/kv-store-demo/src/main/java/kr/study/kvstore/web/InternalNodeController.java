@@ -4,6 +4,7 @@ import kr.study.kvstore.domain.ClusterNodeService;
 import kr.study.kvstore.domain.ClusterNodeService.AvailabilityCommand;
 import kr.study.kvstore.domain.ClusterNodeService.GossipMessage;
 import kr.study.kvstore.domain.ClusterNodeService.NodeSnapshot;
+import kr.study.kvstore.domain.ClusterNodeService.QuorumSettingsCommand;
 import kr.study.kvstore.domain.ClusterNodeService.ReplicaReadResponse;
 import kr.study.kvstore.domain.ClusterNodeService.ReplicaWriteRequest;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +42,11 @@ public class InternalNodeController {
     @PostMapping("/admin/availability")
     public void availability(@RequestBody AvailabilityCommand command) {
         clusterNodeService.setAvailable(command.available());
+    }
+
+    @PostMapping("/admin/quorum")
+    public void quorum(@RequestBody QuorumSettingsCommand command) {
+        clusterNodeService.applyQuorum(command);
     }
 
     @GetMapping("/snapshot")

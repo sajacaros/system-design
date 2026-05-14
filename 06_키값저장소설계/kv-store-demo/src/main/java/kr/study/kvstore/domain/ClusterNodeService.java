@@ -32,6 +32,8 @@ public class ClusterNodeService {
     private final Map<String, MembershipEntry> membership = new ConcurrentHashMap<>();
     private final ArrayDeque<String> events = new ArrayDeque<>();
     private final AtomicInteger heartbeat = new AtomicInteger();
+    private volatile int writeQuorum;
+    private volatile int readQuorum;
     private volatile boolean available = true;
 
     public ClusterNodeService(DemoProperties properties, RestTemplate restTemplate) {
@@ -39,6 +41,8 @@ public class ClusterNodeService {
         this.restTemplate = restTemplate;
         this.nodeId = properties.nodeId();
         this.peersByNodeId = parsePeers(properties.peers());
+        this.writeQuorum = clamp(properties.writeQuorum(), 1, properties.replicationFactor());
+        this.readQuorum = clamp(properties.readQuorum(), 1, properties.replicationFactor());
         Instant now = Instant.now();
         membership.put(nodeId, new MembershipEntry(nodeId, "self", heartbeat.get(), NodeStatus.ALIVE, now));
         peersByNodeId.values().forEach(peer ->
@@ -106,9 +110,10 @@ public class ClusterNodeService {
             }
         }
 
-        boolean quorumReached = ackCount >= properties.writeQuorum();
-        log("PUT " + command.key() + "=" + command.value() + " -> " + ackCount + "/" + properties.writeQuorum() + " write quorum");
-        return new PutResult(command.key(), version, ackCount, properties.writeQuorum(), quorumReached, acks);
+        int requiredWriteQuorum = writeQuorum;
+        boolean quorumReached = ackCount >= requiredWriteQuorum;
+        log("PUT " + command.key() + "=" + command.value() + " -> " + ackCount + "/" + requiredWriteQuorum + " write quorum");
+        return new PutResult(command.key(), version, ackCount, requiredWriteQuorum, quorumReached, acks);
     }
 
     public PutResult putOnNode(String targetNodeId, PutCommand command) {
@@ -152,10 +157,11 @@ public class ClusterNodeService {
             .toList();
         List<VersionedValue> reconciled = reconcile(versions);
         long successfulReads = reads.stream().filter(ReplicaRead::ok).count();
-        boolean quorumReached = successfulReads >= properties.readQuorum();
+        int requiredReadQuorum = readQuorum;
+        boolean quorumReached = successfulReads >= requiredReadQuorum;
         boolean conflict = hasConflict(reconciled);
-        log("GET " + key + " -> " + successfulReads + "/" + properties.readQuorum() + " read quorum, versions " + reconciled.size());
-        return new ReadResult(key, reconciled, reads, (int) successfulReads, properties.readQuorum(), quorumReached, conflict);
+        log("GET " + key + " -> " + successfulReads + "/" + requiredReadQuorum + " read quorum, versions " + reconciled.size());
+        return new ReadResult(key, reconciled, reads, (int) successfulReads, requiredReadQuorum, quorumReached, conflict);
     }
 
     public ReadResult getFromNode(String targetNodeId, String key) {
@@ -255,6 +261,42 @@ public class ClusterNodeService {
         }
     }
 
+    public QuorumSettingsResult setClusterQuorum(QuorumSettingsCommand command) {
+        QuorumSettings settings = applyQuorum(command);
+        List<ReplicaAck> acks = new ArrayList<>();
+        acks.add(new ReplicaAck(nodeId, true, "local quorum updated"));
+        for (Peer peer : peersByNodeId.values()) {
+            try {
+                restTemplate.postForEntity(
+                    peer.endpoint() + "/internal/admin/quorum",
+                    command,
+                    Void.class
+                );
+                acks.add(new ReplicaAck(peer.nodeId(), true, "remote quorum updated"));
+                markPeerAlive(peer.nodeId());
+            } catch (RestClientException exception) {
+                acks.add(new ReplicaAck(peer.nodeId(), false, "remote node unreachable"));
+                markPeerSuspect(peer.nodeId());
+            }
+        }
+        log("quorum changed to W=" + settings.writeQuorum() + ", R=" + settings.readQuorum());
+        return new QuorumSettingsResult(
+            properties.replicationFactor(),
+            settings.writeQuorum(),
+            settings.readQuorum(),
+            settings.writeQuorum() + settings.readQuorum() > properties.replicationFactor(),
+            acks
+        );
+    }
+
+    public QuorumSettings applyQuorum(QuorumSettingsCommand command) {
+        int nextWriteQuorum = clamp(command.writeQuorum(), 1, properties.replicationFactor());
+        int nextReadQuorum = clamp(command.readQuorum(), 1, properties.replicationFactor());
+        writeQuorum = nextWriteQuorum;
+        readQuorum = nextReadQuorum;
+        return new QuorumSettings(properties.replicationFactor(), nextWriteQuorum, nextReadQuorum);
+    }
+
     public NodeSnapshot localSnapshot() {
         return new NodeSnapshot(
             nodeId,
@@ -293,7 +335,7 @@ public class ClusterNodeService {
                 ));
             }
         }
-        return new ClusterSnapshot(nodeId, properties.replicationFactor(), properties.writeQuorum(), properties.readQuorum(), snapshots);
+        return new ClusterSnapshot(nodeId, properties.replicationFactor(), writeQuorum, readQuorum, snapshots);
     }
 
     private boolean saveVersion(VersionedValue incoming) {
@@ -348,7 +390,7 @@ public class ClusterNodeService {
 
     private List<Peer> readTargets() {
         return peersByNodeId.values().stream()
-            .limit(Math.max(0, properties.readQuorum() - 1L))
+            .limit(Math.max(0, readQuorum - 1L))
             .toList();
     }
 
@@ -440,6 +482,10 @@ public class ClusterNodeService {
         }
     }
 
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private Map<String, Peer> parsePeers(List<String> configuredPeers) {
         Map<String, Peer> peers = new LinkedHashMap<>();
         if (configuredPeers == null) {
@@ -519,6 +565,21 @@ public class ClusterNodeService {
     }
 
     public record AvailabilityResult(String nodeId, boolean available, boolean ok, String message) {
+    }
+
+    public record QuorumSettingsCommand(int writeQuorum, int readQuorum) {
+    }
+
+    public record QuorumSettings(int replicationFactor, int writeQuorum, int readQuorum) {
+    }
+
+    public record QuorumSettingsResult(
+        int replicationFactor,
+        int writeQuorum,
+        int readQuorum,
+        boolean quorumOverlap,
+        List<ReplicaAck> acks
+    ) {
     }
 
     public record NodeSnapshot(

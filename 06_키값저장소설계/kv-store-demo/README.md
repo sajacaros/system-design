@@ -20,6 +20,13 @@ R = 2
 
 Because `W + R = N`, the read quorum and write quorum do not always overlap. That makes stale reads possible.
 
+You can change `W` and `R` from the UI. Presets are provided for common trade-offs:
+
+- `W=3, R=2`: stale reads are possible
+- `W=3, R=3`: read/write quorums overlap
+- `W=5, R=1`: read optimized, write requires every replica
+- `W=1, R=5`: write optimized, read checks every replica
+
 ## Run
 
 ```bash
@@ -38,6 +45,8 @@ Open http://localhost:7906.
 5. Resume `D` and `E`.
 6. Select target node `D` and run `GET cart:42`.
 7. Node `D` reads only `R=2` replicas: itself and `E`. Both can still have the old value, so the response can be stale.
+
+Then switch the preset to `W=3, R=3` and repeat the read. Since `W + R > N`, the read quorum overlaps the successful write quorum.
 
 ## Local Process Run
 

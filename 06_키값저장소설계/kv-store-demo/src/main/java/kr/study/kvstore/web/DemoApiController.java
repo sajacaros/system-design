@@ -7,6 +7,8 @@ import kr.study.kvstore.domain.ClusterNodeService.ClusterSnapshot;
 import kr.study.kvstore.domain.ClusterNodeService.GossipResult;
 import kr.study.kvstore.domain.ClusterNodeService.PutCommand;
 import kr.study.kvstore.domain.ClusterNodeService.PutResult;
+import kr.study.kvstore.domain.ClusterNodeService.QuorumSettingsCommand;
+import kr.study.kvstore.domain.ClusterNodeService.QuorumSettingsResult;
 import kr.study.kvstore.domain.ClusterNodeService.ReadResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,5 +63,10 @@ public class DemoApiController {
         @RequestBody AvailabilityCommand command
     ) {
         return clusterNodeService.setNodeAvailability(nodeId, command.available());
+    }
+
+    @PostMapping("/quorum")
+    public QuorumSettingsResult quorum(@RequestBody QuorumSettingsCommand command) {
+        return clusterNodeService.setClusterQuorum(command);
     }
 }
