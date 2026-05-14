@@ -1,0 +1,18 @@
+server:
+  port: ${SERVER_PORT:7906}
+
+spring:
+  application:
+    name: kv-store-demo
+  thymeleaf:
+    cache: false
+
+demo:
+  node-id: ${NODE_ID:A}
+  peers: ${PEERS:}
+  replication-factor: ${REPLICATION_FACTOR:5}
+  write-quorum: ${WRITE_QUORUM:3}
+  read-quorum: ${READ_QUORUM:2}
+  gossip:
+    suspect-after-ms: ${SUSPECT_AFTER_MS:5000}
+    dead-after-ms: ${DEAD_AFTER_MS:10000}

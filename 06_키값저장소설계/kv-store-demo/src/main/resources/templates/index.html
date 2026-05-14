@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Distributed KV Store Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --text: #1f2328;
+        --muted: #59636e;
+        --line: #d8dee4;
+        --soft: #f6f8fa;
+        --blue: #0969da;
+        --green: #1a7f37;
+        --yellow: #9a6700;
+        --red: #cf222e;
+        --violet: #8250df;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0;
+      }
+
+      button,
+      input,
+      select {
+        min-height: 38px;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      button {
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        color: var(--text);
+        background: #ffffff;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: var(--blue);
+        color: #ffffff;
+        background: var(--blue);
+      }
+
+      button.danger {
+        border-color: rgba(207, 34, 46, 0.32);
+        color: var(--red);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      h3 {
+        font-size: 15px;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: var(--soft);
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 0.95em;
+      }
+
+      .shell {
+        max-width: 1760px;
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: end;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .masthead p {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .status {
+        padding: 6px 10px;
+        border-radius: 999px;
+        color: var(--green);
+        background: #dafbe1;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .layout {
+        display: grid;
+        gap: 16px;
+        align-items: start;
+        margin-top: 16px;
+      }
+
+      .panel,
+      .node-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .panel-head {
+        padding: 14px;
+        border-bottom: 1px solid var(--line);
+        background: var(--soft);
+      }
+
+      .panel-head p {
+        margin-top: 5px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .panel-body {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.9fr) auto minmax(340px, 1.1fr);
+        gap: 12px;
+        align-items: end;
+        padding: 14px;
+      }
+
+      .field-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 150px;
+        gap: 8px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .result {
+        min-height: 96px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+        color: var(--muted);
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .cluster-meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .metric {
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 4px;
+        font-size: 20px;
+        font-weight: 800;
+      }
+
+      .node-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .node-card {
+        overflow: hidden;
+      }
+
+      .node-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--soft);
+      }
+
+      .node-head small {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        color: #ffffff;
+        background: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .badge.alive,
+      .badge.ok {
+        background: var(--green);
+      }
+
+      .badge.suspect {
+        background: var(--yellow);
+      }
+
+      .badge.dead,
+      .badge.fail,
+      .badge.conflict {
+        background: var(--red);
+      }
+
+      .badge.paused {
+        background: var(--violet);
+      }
+
+      .node-body {
+        display: grid;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .version {
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .version + .version {
+        margin-top: 8px;
+      }
+
+      .version strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .clock {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+
+      .clock span {
+        padding: 3px 6px;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--muted);
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 6px 5px;
+        border-bottom: 1px solid #edf1f5;
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .log-list {
+        display: grid;
+        gap: 7px;
+        max-height: 150px;
+        overflow: auto;
+      }
+
+      .log-line {
+        padding: 7px 8px;
+        border-left: 3px solid var(--blue);
+        border-radius: 5px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 1500px) {
+        .node-grid {
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+      }
+
+      @media (max-width: 980px) {
+        .masthead,
+        .panel-body {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          padding: 12px;
+        }
+
+        .field-row,
+        .cluster-meta {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div>
+          <h1>분산 키-값 저장소 데모</h1>
+          <p>이 화면은 하나의 노드를 coordinator로 사용합니다. 데이터는 실제 HTTP 호출로 peer Spring Boot 노드에 복제되고, 읽기는 여러 replica에서 버전을 모아 벡터 시계로 충돌을 판정합니다.</p>
+        </div>
+        <span id="status" class="status">loading</span>
+      </header>
+
+      <div class="layout">
+        <aside class="panel">
+          <div class="panel-head">
+            <h2>클라이언트 요청</h2>
+            <p><code>PUT</code>은 write quorum, <code>GET</code>은 read quorum을 통과하는지 보여줍니다.</p>
+          </div>
+          <div class="panel-body">
+            <div class="field-row">
+              <label>
+                <span class="empty">key</span>
+                <input id="key-input" value="cart:42" />
+              </label>
+              <label>
+                <span class="empty">value</span>
+                <input id="value-input" value="book" />
+              </label>
+              <label>
+                <span class="empty">entry coordinator</span>
+                <select id="target-node-select"></select>
+              </label>
+            </div>
+            <div class="actions">
+              <button id="put-button" class="primary" type="button">PUT</button>
+              <button id="get-button" type="button">GET</button>
+            </div>
+            <div id="result" class="result">요청 결과가 여기에 표시됩니다.</div>
+          </div>
+        </aside>
+
+        <section>
+          <div id="cluster-meta" class="cluster-meta"></div>
+          <div id="node-grid" class="node-grid"></div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const state = {
+        snapshot: null,
+        selectedKey: "cart:42",
+        targetNodeId: "A",
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        bindControls();
+        refresh();
+        window.setInterval(refresh, 2500);
+      });
+
+      function bindControls() {
+        document.getElementById("put-button").addEventListener("click", putValue);
+        document.getElementById("get-button").addEventListener("click", getValue);
+        document.getElementById("target-node-select").addEventListener("change", (event) => {
+          state.targetNodeId = event.target.value;
+        });
+        document.getElementById("key-input").addEventListener("input", (event) => {
+          state.selectedKey = event.target.value.trim();
+          render();
+        });
+      }
+
+      async function refresh() {
+        try {
+          state.snapshot = await fetchJson("/api/state");
+          setStatus("ready", "ready");
+          render();
+        } catch (error) {
+          setStatus("fail", "disconnected");
+          showResult("상태 조회 실패: " + error.message);
+        }
+      }
+
+      async function putValue() {
+        const key = document.getElementById("key-input").value.trim();
+        const value = document.getElementById("value-input").value.trim();
+        state.selectedKey = key;
+        const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, value }),
+        });
+        showResult(formatPutResult(result));
+        await refresh();
+      }
+
+      async function getValue() {
+        const key = document.getElementById("key-input").value.trim();
+        state.selectedKey = key;
+        const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv/${encodeURIComponent(key)}`);
+        showResult(formatReadResult(result));
+        await refresh();
+      }
+
+      async function toggleNode(nodeId, available) {
+        const result = await fetchJson(`/api/nodes/${encodeURIComponent(nodeId)}/availability`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ available }),
+        });
+        showResult(`${result.nodeId}: available=${result.available} (${result.message})`);
+        await refresh();
+      }
+
+      async function fetchJson(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `HTTP ${response.status}`);
+        }
+        return response.json();
+      }
+
+      function render() {
+        if (!state.snapshot) {
+          return;
+        }
+        renderTargetOptions();
+        document.getElementById("cluster-meta").innerHTML = [
+          metric("coordinator", state.snapshot.coordinatorNodeId),
+          metric("write quorum", `${state.snapshot.writeQuorum}/${state.snapshot.replicationFactor}`),
+          metric("read quorum", `${state.snapshot.readQuorum}/${state.snapshot.replicationFactor}`),
+          metric("consistency", state.snapshot.writeQuorum + state.snapshot.readQuorum > state.snapshot.replicationFactor ? "overlap" : "stale possible"),
+        ].join("");
+        document.getElementById("node-grid").innerHTML = state.snapshot.nodes
+          .sort((left, right) => left.nodeId.localeCompare(right.nodeId))
+          .map(renderNode)
+          .join("");
+      }
+
+      function renderTargetOptions() {
+        const select = document.getElementById("target-node-select");
+        const nodeIds = state.snapshot.nodes.map((node) => node.nodeId).sort();
+        if (!nodeIds.includes(state.targetNodeId)) {
+          state.targetNodeId = state.snapshot.coordinatorNodeId;
+        }
+        select.innerHTML = nodeIds
+          .map((nodeId) => `<option value="${escapeHtml(nodeId)}" ${nodeId === state.targetNodeId ? "selected" : ""}>${escapeHtml(nodeId)} as coordinator</option>`)
+          .join("");
+      }
+
+      function renderNode(node) {
+        const selectedVersions = node.store[state.selectedKey] || [];
+        const availabilityClass = node.available ? "ok" : "paused";
+        const availabilityText = node.available ? "AVAILABLE" : "PAUSED";
+        return `
+          <article class="node-card">
+            <div class="node-head">
+              <div>
+                <h2>Node ${escapeHtml(node.nodeId)}</h2>
+                <small>${escapeHtml(displayEndpoint(node))}</small>
+              </div>
+              <span class="badge ${availabilityClass}">${availabilityText}</span>
+            </div>
+            <div class="node-body">
+              <div>
+                <div class="section-title">
+                  <h3>local store: <code>${escapeHtml(state.selectedKey)}</code></h3>
+                  <button class="${node.available ? "danger" : ""}" type="button" onclick="toggleNode('${escapeJs(node.nodeId)}', ${!node.available})">${node.available ? "Pause" : "Resume"}</button>
+                </div>
+                ${selectedVersions.length === 0 ? '<p class="empty">이 key의 값이 없습니다.</p>' : selectedVersions.map(renderVersion).join("")}
+              </div>
+              <div>
+                <div class="section-title"><h3>membership</h3></div>
+                ${renderMembership(node.membership)}
+              </div>
+              <div>
+                <div class="section-title"><h3>events</h3></div>
+                <div class="log-list">${node.events.length === 0 ? '<p class="empty">event 없음</p>' : node.events.map((event) => `<div class="log-line">${escapeHtml(event)}</div>`).join("")}</div>
+              </div>
+            </div>
+          </article>
+        `;
+      }
+
+      function renderVersion(version) {
+        return `
+          <section class="version">
+            <strong>${escapeHtml(version.value)} <code>${escapeHtml(version.versionId)}</code></strong>
+            <div class="clock">
+              ${Object.entries(version.clock.entries).sort().map(([nodeId, counter]) => `<span>${escapeHtml(nodeId)}:${counter}</span>`).join("")}
+            </div>
+          </section>
+        `;
+      }
+
+      function displayEndpoint(node) {
+        if (node.endpoint === "self") {
+          return node.nodeId === state.snapshot.coordinatorNodeId ? "local coordinator" : "local node";
+        }
+        return node.endpoint;
+      }
+
+      function renderMembership(membership) {
+        return `
+          <table>
+            <thead><tr><th>node</th><th>hb</th><th>status</th></tr></thead>
+            <tbody>
+              ${membership.map((entry) => `
+                <tr>
+                  <td>${escapeHtml(entry.nodeId)}</td>
+                  <td>${entry.heartbeat}</td>
+                  <td><span class="badge ${entry.status.toLowerCase()}">${entry.status}</span></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function formatPutResult(result) {
+        const acks = result.acks.map((ack) => `${ack.nodeId}: ${ack.ok ? "ack" : "fail"} (${ack.message})`).join("\n");
+        return [
+          `PUT through coordinator ${state.targetNodeId} ${result.key}=${result.version.value}`,
+          `version ${result.version.versionId} clock ${formatClock(result.version.clock.entries)}`,
+          `write quorum ${result.ackCount}/${result.requiredAckCount}: ${result.quorumReached ? "reached" : "failed"}`,
+          acks,
+        ].join("\n");
+      }
+
+      function formatReadResult(result) {
+        const versions = result.versions.length === 0
+          ? "no value"
+          : result.versions.map((version) => `${version.versionId}: ${version.value} ${formatClock(version.clock.entries)}`).join("\n");
+        const reads = result.reads.map((read) => `${read.nodeId}: ${read.ok ? "ok" : "fail"} (${read.message})`).join("\n");
+        return [
+          `GET through coordinator ${state.targetNodeId} ${result.key}`,
+          `read quorum ${result.readCount}/${result.requiredReadCount}: ${result.quorumReached ? "reached" : "failed"}`,
+          `conflict: ${result.conflict}`,
+          "versions:",
+          versions,
+          "reads:",
+          reads,
+        ].join("\n");
+      }
+
+      function metric(label, value) {
+        return `<section class="metric"><strong>${label}</strong><span>${escapeHtml(String(value))}</span></section>`;
+      }
+
+      function formatClock(entries) {
+        return "{" + Object.entries(entries).sort().map(([key, value]) => `${key}:${value}`).join(",") + "}";
+      }
+
+      function showResult(message) {
+        document.getElementById("result").textContent = message;
+      }
+
+      function setStatus(kind, label) {
+        const element = document.getElementById("status");
+        element.className = `status ${kind}`;
+        element.textContent = label;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function escapeJs(value) {
+        return String(value).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+      }
+    </script>
+  </body>
+</html>
