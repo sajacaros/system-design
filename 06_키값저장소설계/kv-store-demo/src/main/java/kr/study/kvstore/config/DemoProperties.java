@@ -8,6 +8,7 @@ public record DemoProperties(
     String nodeId,
     List<String> peers,
     int replicationFactor,
+    int virtualNodes,
     int writeQuorum,
     int readQuorum,
     Gossip gossip

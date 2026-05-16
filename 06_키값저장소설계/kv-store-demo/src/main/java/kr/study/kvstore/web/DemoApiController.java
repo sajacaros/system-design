@@ -6,6 +6,7 @@ import kr.study.kvstore.domain.ClusterNodeService.AvailabilityResult;
 import kr.study.kvstore.domain.ClusterNodeService.ClusterSnapshot;
 import kr.study.kvstore.domain.ClusterNodeService.GossipResult;
 import kr.study.kvstore.domain.ClusterNodeService.HintedHandoffResult;
+import kr.study.kvstore.domain.ClusterNodeService.KeyPlacement;
 import kr.study.kvstore.domain.ClusterNodeService.PutCommand;
 import kr.study.kvstore.domain.ClusterNodeService.PutResult;
 import kr.study.kvstore.domain.ClusterNodeService.QuorumSettingsCommand;
@@ -51,6 +52,11 @@ public class DemoApiController {
     @GetMapping("/nodes/{nodeId}/kv/{key}")
     public ReadResult getFromNode(@PathVariable String nodeId, @PathVariable String key) {
         return clusterNodeService.getFromNode(nodeId, key);
+    }
+
+    @GetMapping("/placement/{key}")
+    public KeyPlacement placement(@PathVariable String key) {
+        return clusterNodeService.keyPlacement(key);
     }
 
     @PostMapping("/gossip")

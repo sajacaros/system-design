@@ -259,6 +259,11 @@
         overflow: hidden;
       }
 
+      .node-card.owner {
+        border-color: rgba(9, 105, 218, 0.55);
+        box-shadow: inset 0 0 0 1px rgba(9, 105, 218, 0.18);
+      }
+
       .node-head {
         display: flex;
         justify-content: space-between;
@@ -267,6 +272,32 @@
         padding: 10px;
         border-bottom: 1px solid var(--line);
         background: var(--soft);
+      }
+
+      .owner-tag {
+        display: inline-block;
+        margin-left: 6px;
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .placement-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      .placement-pill {
+        padding: 5px 8px;
+        border: 1px solid rgba(9, 105, 218, 0.3);
+        border-radius: 999px;
+        color: var(--blue);
+        background: #ddf4ff;
+        font-size: 12px;
+        font-weight: 800;
       }
 
       .node-head small {
@@ -557,6 +588,7 @@
 
           <section>
             <div id="cluster-meta" class="cluster-meta"></div>
+            <div id="placement-summary" class="placement-summary"></div>
             <div id="node-grid" class="node-grid"></div>
           </section>
         </div>
@@ -595,6 +627,7 @@
 
           <section>
             <div id="sync-cluster-meta" class="cluster-meta"></div>
+            <div id="sync-placement-summary" class="placement-summary"></div>
             <div id="sync-node-grid" class="node-grid"></div>
           </section>
         </div>
@@ -604,6 +637,7 @@
     <script>
       const state = {
         snapshot: null,
+        placement: null,
         selectedKey: "cart:42",
         targetNodeId: "A",
         activeTab: "request",
@@ -660,11 +694,13 @@
         });
         document.getElementById("key-input").addEventListener("input", (event) => {
           state.selectedKey = event.target.value.trim();
+          state.placement = null;
           document.getElementById("sync-key-input").value = event.target.value;
           render();
         });
         document.getElementById("sync-key-input").addEventListener("input", (event) => {
           state.selectedKey = event.target.value.trim();
+          state.placement = null;
           document.getElementById("key-input").value = event.target.value;
           render();
         });
@@ -673,6 +709,9 @@
       async function refresh() {
         try {
           state.snapshot = await fetchJson("/api/state");
+          state.placement = state.selectedKey
+            ? await fetchJson(`/api/placement/${encodeURIComponent(state.selectedKey)}`)
+            : null;
           setStatus("ready", "ready");
           render();
         } catch (error) {
@@ -788,16 +827,20 @@
         const nodes = state.snapshot.nodes.sort((left, right) => left.nodeId.localeCompare(right.nodeId));
         document.getElementById("cluster-meta").innerHTML = [
           metric("coordinator", state.snapshot.coordinatorNodeId),
+          metric("servers", state.snapshot.serverCount),
+          metric("vnodes", state.snapshot.tokenCount),
           metric("write quorum", `${state.snapshot.writeQuorum}/${state.snapshot.replicationFactor}`),
           metric("read quorum", `${state.snapshot.readQuorum}/${state.snapshot.replicationFactor}`),
           metric("consistency", state.snapshot.writeQuorum + state.snapshot.readQuorum > state.snapshot.replicationFactor ? "overlap" : "stale possible"),
         ].join("");
         document.getElementById("sync-cluster-meta").innerHTML = [
           metric("coordinator", state.snapshot.coordinatorNodeId),
+          metric("replicas/key", state.snapshot.replicationFactor),
           metric("pending hints", countPendingHints(nodes)),
           metric("quorum", `W${state.snapshot.writeQuorum} / R${state.snapshot.readQuorum}`),
           metric("sync", countPendingHints(nodes) === 0 ? "clean" : "handoff needed"),
         ].join("");
+        renderPlacementSummary();
         const nodeHtml = nodes.map(renderNode).join("");
         document.getElementById("node-grid").innerHTML = nodeHtml;
         document.getElementById("sync-node-grid").innerHTML = nodeHtml;
@@ -835,16 +878,31 @@
         syncSelect.innerHTML = options;
       }
 
+      function renderPlacementSummary() {
+        const html = state.placement
+          ? [
+              `<span class="placement-pill">key ${escapeHtml(state.placement.key)}</span>`,
+              `<span class="placement-pill">hash ${escapeHtml(String(state.placement.keyHash))}</span>`,
+              ...state.placement.replicaNodes.map((nodeId, index) =>
+                `<span class="placement-pill">${index + 1}. Node ${escapeHtml(nodeId)}</span>`
+              ),
+            ].join("")
+          : "";
+        document.getElementById("placement-summary").innerHTML = html;
+        document.getElementById("sync-placement-summary").innerHTML = html;
+      }
+
       function renderNode(node) {
         const selectedVersions = node.store[state.selectedKey] || [];
         const hints = node.hints || [];
         const availabilityClass = node.available ? "ok" : "paused";
         const availabilityText = node.available ? "AVAILABLE" : "PAUSED";
+        const owner = isReplicaOwner(node.nodeId);
         return `
-          <article class="node-card">
+          <article class="node-card ${owner ? "owner" : ""}">
             <div class="node-head">
               <div>
-                <h2>Node ${escapeHtml(node.nodeId)}</h2>
+                <h2>Node ${escapeHtml(node.nodeId)}${owner ? '<span class="owner-tag">replica</span>' : ""}</h2>
                 <small>${escapeHtml(displayEndpoint(node))}</small>
               </div>
               <span class="badge ${availabilityClass}">${availabilityText}</span>
@@ -872,6 +930,10 @@
             </div>
           </article>
         `;
+      }
+
+      function isReplicaOwner(nodeId) {
+        return Boolean(state.placement && state.placement.replicaNodes.includes(nodeId));
       }
 
       function renderPendingHints(nodes) {

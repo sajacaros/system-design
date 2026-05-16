@@ -28,6 +28,7 @@ public class ClusterNodeService {
     private final RestTemplate restTemplate;
     private final String nodeId;
     private final Map<String, Peer> peersByNodeId;
+    private final ConsistentHashRing hashRing;
     private final Map<String, List<VersionedValue>> store = new ConcurrentHashMap<>();
     private final Map<String, List<HintedHandoff>> pendingHints = new ConcurrentHashMap<>();
     private final Map<String, MembershipEntry> membership = new ConcurrentHashMap<>();
@@ -42,14 +43,15 @@ public class ClusterNodeService {
         this.restTemplate = restTemplate;
         this.nodeId = properties.nodeId();
         this.peersByNodeId = parsePeers(properties.peers());
-        this.writeQuorum = clamp(properties.writeQuorum(), 1, properties.replicationFactor());
-        this.readQuorum = clamp(properties.readQuorum(), 1, properties.replicationFactor());
+        this.hashRing = new ConsistentHashRing(clusterNodeIds(), properties.virtualNodes());
+        this.writeQuorum = clamp(properties.writeQuorum(), 1, effectiveReplicationFactor());
+        this.readQuorum = clamp(properties.readQuorum(), 1, effectiveReplicationFactor());
         Instant now = Instant.now();
         membership.put(nodeId, new MembershipEntry(nodeId, "self", heartbeat.get(), NodeStatus.ALIVE, now));
         peersByNodeId.values().forEach(peer ->
             membership.put(peer.nodeId(), new MembershipEntry(peer.nodeId(), peer.endpoint(), 0, NodeStatus.ALIVE, now))
         );
-        log("node " + nodeId + " started with peers " + peersByNodeId.keySet());
+        log("node " + nodeId + " started with peers " + peersByNodeId.keySet() + ", hash ring tokens " + hashRing.tokenCount());
     }
 
     public String nodeId() {
@@ -87,7 +89,8 @@ public class ClusterNodeService {
 
     public PutResult put(PutCommand command) {
         requireAvailable();
-        VectorClock baseClock = siblings(command.key()).stream()
+        List<ReplicaTarget> targets = replicaTargets(command.key());
+        VectorClock baseClock = readVersionsForClock(command.key(), targets).stream()
             .map(VersionedValue::clock)
             .reduce(VectorClock.empty(), VectorClock::merge);
         VectorClock nextClock = baseClock.increment(nodeId);
@@ -100,29 +103,34 @@ public class ClusterNodeService {
             Instant.now()
         );
 
-        int ackCount = saveVersion(version) ? 1 : 0;
+        int ackCount = 0;
         List<ReplicaAck> acks = new ArrayList<>();
-        acks.add(new ReplicaAck(nodeId, true, "local write"));
-        for (Peer peer : writeTargets()) {
+        for (ReplicaTarget target : targets) {
             try {
-                restTemplate.postForEntity(
-                    peer.endpoint() + "/internal/replica/write",
-                    new ReplicaWriteRequest(version),
-                    Void.class
-                );
+                if (target.local()) {
+                    saveVersion(version);
+                    acks.add(new ReplicaAck(target.nodeId(), true, "local replica"));
+                } else {
+                    restTemplate.postForEntity(
+                        target.endpoint() + "/internal/replica/write",
+                        new ReplicaWriteRequest(version),
+                        Void.class
+                    );
+                    acks.add(new ReplicaAck(target.nodeId(), true, "replicated"));
+                    markPeerAlive(target.nodeId());
+                }
                 ackCount++;
-                acks.add(new ReplicaAck(peer.nodeId(), true, "replicated"));
-                markPeerAlive(peer.nodeId());
             } catch (RestClientException exception) {
-                acks.add(new ReplicaAck(peer.nodeId(), false, "unreachable"));
-                addHint(peer.nodeId(), version);
-                markPeerSuspect(peer.nodeId());
+                acks.add(new ReplicaAck(target.nodeId(), false, "unreachable"));
+                addHint(target.nodeId(), version);
+                markPeerSuspect(target.nodeId());
             }
         }
 
         int requiredWriteQuorum = writeQuorum;
         boolean quorumReached = ackCount >= requiredWriteQuorum;
-        log("PUT " + command.key() + "=" + command.value() + " -> " + ackCount + "/" + requiredWriteQuorum + " write quorum");
+        log("PUT " + command.key() + "=" + command.value() + " replicas " + targets.stream().map(ReplicaTarget::nodeId).toList()
+            + " -> " + ackCount + "/" + requiredWriteQuorum + " write quorum");
         return new PutResult(command.key(), version, ackCount, requiredWriteQuorum, quorumReached, acks, nodeId, nodeId, false);
     }
 
@@ -152,20 +160,23 @@ public class ClusterNodeService {
     public ReadResult get(String key) {
         requireAvailable();
         List<ReplicaRead> reads = new ArrayList<>();
-        reads.add(new ReplicaRead(nodeId, true, siblings(key), "local read"));
-        for (Peer peer : readTargets()) {
+        for (ReplicaTarget target : readTargets(key)) {
             try {
-                String encodedKey = UriUtils.encodePathSegment(key, java.nio.charset.StandardCharsets.UTF_8);
-                ResponseEntity<ReplicaReadResponse> response = restTemplate.getForEntity(
-                    peer.endpoint() + "/internal/replica/read/" + encodedKey,
-                    ReplicaReadResponse.class
-                );
-                ReplicaReadResponse body = Objects.requireNonNull(response.getBody());
-                reads.add(new ReplicaRead(peer.nodeId(), true, body.versions(), "remote read"));
-                markPeerAlive(peer.nodeId());
+                if (target.local()) {
+                    reads.add(new ReplicaRead(target.nodeId(), true, siblings(key), "local read"));
+                } else {
+                    String encodedKey = UriUtils.encodePathSegment(key, java.nio.charset.StandardCharsets.UTF_8);
+                    ResponseEntity<ReplicaReadResponse> response = restTemplate.getForEntity(
+                        target.endpoint() + "/internal/replica/read/" + encodedKey,
+                        ReplicaReadResponse.class
+                    );
+                    ReplicaReadResponse body = Objects.requireNonNull(response.getBody());
+                    reads.add(new ReplicaRead(target.nodeId(), true, body.versions(), "remote read"));
+                    markPeerAlive(target.nodeId());
+                }
             } catch (RestClientException exception) {
-                reads.add(new ReplicaRead(peer.nodeId(), false, List.of(), "unreachable"));
-                markPeerSuspect(peer.nodeId());
+                reads.add(new ReplicaRead(target.nodeId(), false, List.of(), "unreachable"));
+                markPeerSuspect(target.nodeId());
             }
         }
 
@@ -178,7 +189,8 @@ public class ClusterNodeService {
         int requiredReadQuorum = readQuorum;
         boolean quorumReached = successfulReads >= requiredReadQuorum;
         boolean conflict = hasConflict(reconciled);
-        log("GET " + key + " -> " + successfulReads + "/" + requiredReadQuorum + " read quorum, versions " + reconciled.size());
+        log("GET " + key + " replicas " + reads.stream().map(ReplicaRead::nodeId).toList()
+            + " -> " + successfulReads + "/" + requiredReadQuorum + " read quorum, versions " + reconciled.size());
         return new ReadResult(key, reconciled, reads, (int) successfulReads, requiredReadQuorum, quorumReached, conflict, nodeId, nodeId, false);
     }
 
@@ -307,20 +319,20 @@ public class ClusterNodeService {
         }
         log("quorum changed to W=" + settings.writeQuorum() + ", R=" + settings.readQuorum());
         return new QuorumSettingsResult(
-            properties.replicationFactor(),
+            effectiveReplicationFactor(),
             settings.writeQuorum(),
             settings.readQuorum(),
-            settings.writeQuorum() + settings.readQuorum() > properties.replicationFactor(),
+            settings.writeQuorum() + settings.readQuorum() > effectiveReplicationFactor(),
             acks
         );
     }
 
     public QuorumSettings applyQuorum(QuorumSettingsCommand command) {
-        int nextWriteQuorum = clamp(command.writeQuorum(), 1, properties.replicationFactor());
-        int nextReadQuorum = clamp(command.readQuorum(), 1, properties.replicationFactor());
+        int nextWriteQuorum = clamp(command.writeQuorum(), 1, effectiveReplicationFactor());
+        int nextReadQuorum = clamp(command.readQuorum(), 1, effectiveReplicationFactor());
         writeQuorum = nextWriteQuorum;
         readQuorum = nextReadQuorum;
-        return new QuorumSettings(properties.replicationFactor(), nextWriteQuorum, nextReadQuorum);
+        return new QuorumSettings(effectiveReplicationFactor(), nextWriteQuorum, nextReadQuorum);
     }
 
     public HintedHandoffResult runClusterHintedHandoff() {
@@ -402,7 +414,28 @@ public class ClusterNodeService {
                 ));
             }
         }
-        return new ClusterSnapshot(nodeId, properties.replicationFactor(), writeQuorum, readQuorum, snapshots);
+        return new ClusterSnapshot(
+            nodeId,
+            hashRing.nodeCount(),
+            effectiveReplicationFactor(),
+            hashRing.virtualNodesPerNode(),
+            hashRing.tokenCount(),
+            writeQuorum,
+            readQuorum,
+            snapshots
+        );
+    }
+
+    public KeyPlacement keyPlacement(String key) {
+        return new KeyPlacement(
+            key,
+            hashRing.hashOf(key),
+            replicaTargets(key).stream().map(ReplicaTarget::nodeId).toList(),
+            hashRing.nodeCount(),
+            effectiveReplicationFactor(),
+            hashRing.virtualNodesPerNode(),
+            hashRing.tokenCount()
+        );
     }
 
     private boolean saveVersion(VersionedValue incoming) {
@@ -449,15 +482,64 @@ public class ClusterNodeService {
         return false;
     }
 
-    private List<Peer> writeTargets() {
-        return peersByNodeId.values().stream()
-            .limit(Math.max(0, properties.replicationFactor() - 1L))
+    private List<ReplicaTarget> replicaTargets(String key) {
+        return hashRing.replicasFor(key, effectiveReplicationFactor()).stream()
+            .map(this::targetFor)
+            .filter(Objects::nonNull)
             .toList();
     }
 
-    private List<Peer> readTargets() {
-        return peersByNodeId.values().stream()
-            .limit(Math.max(0, readQuorum - 1L))
+    private List<ReplicaTarget> readTargets(String key) {
+        return replicaTargets(key).stream()
+            .limit(readQuorum)
+            .toList();
+    }
+
+    private ReplicaTarget targetFor(String targetNodeId) {
+        if (nodeId.equals(targetNodeId)) {
+            return new ReplicaTarget(targetNodeId, "self", true);
+        }
+        Peer peer = peersByNodeId.get(targetNodeId);
+        if (peer == null) {
+            return null;
+        }
+        return new ReplicaTarget(peer.nodeId(), peer.endpoint(), false);
+    }
+
+    private List<VersionedValue> readVersionsForClock(String key, List<ReplicaTarget> targets) {
+        List<VersionedValue> versions = new ArrayList<>();
+        for (ReplicaTarget target : targets) {
+            try {
+                if (target.local()) {
+                    versions.addAll(siblings(key));
+                } else {
+                    String encodedKey = UriUtils.encodePathSegment(key, java.nio.charset.StandardCharsets.UTF_8);
+                    ResponseEntity<ReplicaReadResponse> response = restTemplate.getForEntity(
+                        target.endpoint() + "/internal/replica/read/" + encodedKey,
+                        ReplicaReadResponse.class
+                    );
+                    ReplicaReadResponse body = Objects.requireNonNull(response.getBody());
+                    versions.addAll(body.versions());
+                    markPeerAlive(target.nodeId());
+                }
+            } catch (RestClientException exception) {
+                markPeerSuspect(target.nodeId());
+            }
+        }
+        return versions;
+    }
+
+    private int effectiveReplicationFactor() {
+        return Math.min(properties.replicationFactor(), hashRing.nodeCount());
+    }
+
+    private List<String> clusterNodeIds() {
+        List<String> nodeIds = new ArrayList<>();
+        nodeIds.add(nodeId);
+        nodeIds.addAll(peersByNodeId.keySet());
+        return nodeIds.stream()
+            .distinct()
+            .sorted()
             .toList();
     }
 
@@ -673,6 +755,9 @@ public class ClusterNodeService {
     private record Peer(String nodeId, String endpoint) {
     }
 
+    private record ReplicaTarget(String nodeId, String endpoint, boolean local) {
+    }
+
     private record HintedHandoff(String hintId, String targetNodeId, VersionedValue version, Instant createdAt) {
     }
 
@@ -768,6 +853,17 @@ public class ClusterNodeService {
     public record QuorumSettings(int replicationFactor, int writeQuorum, int readQuorum) {
     }
 
+    public record KeyPlacement(
+        String key,
+        long keyHash,
+        List<String> replicaNodes,
+        int serverCount,
+        int replicationFactor,
+        int virtualNodes,
+        int tokenCount
+    ) {
+    }
+
     public record QuorumSettingsResult(
         int replicationFactor,
         int writeQuorum,
@@ -818,7 +914,10 @@ public class ClusterNodeService {
 
     public record ClusterSnapshot(
         String coordinatorNodeId,
+        int serverCount,
         int replicationFactor,
+        int virtualNodes,
+        int tokenCount,
         int writeQuorum,
         int readQuorum,
         List<NodeSnapshot> nodes

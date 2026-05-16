@@ -11,6 +11,7 @@ demo:
   node-id: ${NODE_ID:A}
   peers: ${PEERS:}
   replication-factor: ${REPLICATION_FACTOR:5}
+  virtual-nodes: ${VIRTUAL_NODES:16}
   write-quorum: ${WRITE_QUORUM:3}
   read-quorum: ${READ_QUORUM:2}
   gossip:
