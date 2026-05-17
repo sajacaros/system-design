@@ -41,6 +41,21 @@
 - Dynamo 스타일의 full sloppy quorum처럼 임시 non-owner 노드에 대체 저장하는 동작까지 구현하지는 않았습니다.
 - conflict는 벡터 시계로 감지하고 siblings로 보여주지만, 사용자가 conflict를 수동 병합하는 UI는 없습니다.
 
+## 기술별 구현 여부
+
+| 6장 기술 | 구현 여부 | 소스 기준 |
+| --- | --- | --- |
+| 안정 해시 (consistent hashing) | 구현됨 | `ConsistentHashRing`이 SHA-256 hash ring을 만들고 key별 replica owner를 계산합니다. |
+| 가상노드 (virtual node) | 구현됨 | `VIRTUAL_NODES=16`, `nodeId-v{index}` token으로 physical node당 여러 ring token을 만듭니다. |
+| 데이터 다중화 (replication) | 구현됨 | `REPLICATION_FACTOR=3`, `replicaTargets()`, `/internal/replica/write`로 key를 3개 replica owner에 저장합니다. |
+| 정족수 합의 (quorum consensus) | 구현됨 | write는 ack 수가 `W` 이상인지, read는 성공 응답 수가 `R` 이상인지 확인합니다. |
+| 결과적 일관성 (eventual consistency) | 부분 구현 | hinted handoff와 vector clock reconciliation은 있지만 anti-entropy/Merkle tree는 없습니다. |
+| 버저닝 (versioning) | 구현됨 | `VersionedValue`가 `versionId`, `writtenAt`, `VectorClock`을 보관합니다. |
+| 벡터 시계 (vector clock) | 구현됨 | `VectorClock`이 `merge`, `increment`, `descendsFrom`, `conflictsWith`를 제공합니다. |
+| 가십 프로토콜 (gossip protocol) | 구현됨 | `automaticGossip()`, `gossipRound()`, `receiveGossip()`로 membership을 교환합니다. |
+| 느슨한 정족수 (sloppy quorum) | 완전 구현 아님 | 실패 replica owner 대신 non-owner에 임시 저장하는 full sloppy quorum은 없습니다. |
+| hinted handoff | 구현됨 | replica write 실패 시 `pendingHints`에 저장하고, 자동/수동 handoff로 원래 replica에 재전송합니다. |
+
 ## Hash Ring과 Replica
 
 각 key는 SHA-256 기반 consistent hash ring에 배치됩니다. 기본 설정은 물리 노드 1개당 virtual node 16개이므로, 5개 서버 클러스터에는 총 80개의 ring token이 있습니다.
