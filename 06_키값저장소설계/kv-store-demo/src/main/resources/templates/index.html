@@ -121,34 +121,6 @@
         font-weight: 700;
       }
 
-      .tabs {
-        display: flex;
-        gap: 6px;
-        margin-top: 12px;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .tab {
-        min-height: 34px;
-        border-bottom-color: transparent;
-        border-radius: 6px 6px 0 0;
-        color: var(--muted);
-        font-weight: 700;
-      }
-
-      .tab.active {
-        color: var(--blue);
-        background: var(--soft);
-      }
-
-      .tab-panel {
-        display: none;
-      }
-
-      .tab-panel.active {
-        display: block;
-      }
-
       .layout {
         display: grid;
         gap: 12px;
@@ -181,10 +153,6 @@
         gap: 10px;
         align-items: end;
         padding: 12px;
-      }
-
-      .sync-body {
-        grid-template-columns: minmax(260px, 0.9fr) auto minmax(340px, 1.1fr);
       }
 
       .field-row {
@@ -224,7 +192,7 @@
 
       .cluster-meta {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 7px;
         margin-bottom: 10px;
       }
@@ -340,8 +308,51 @@
 
       .node-body {
         display: grid;
-        gap: 10px;
+        gap: 8px;
         padding: 10px;
+      }
+
+      .node-body > div:nth-child(3),
+      .node-body > div:nth-child(4) {
+        display: none;
+      }
+
+      .node-summary {
+        display: grid;
+        gap: 6px;
+      }
+
+      .value-state {
+        min-height: 64px;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .node-tools {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      details.node-details {
+        border-top: 1px solid #edf1f5;
+        padding-top: 8px;
+      }
+
+      details.node-details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .details-body {
+        display: grid;
+        gap: 10px;
+        margin-top: 8px;
       }
 
       .section-title {
@@ -353,10 +364,7 @@
       }
 
       .version {
-        padding: 8px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #ffffff;
+        padding: 0;
       }
 
       .version + .version {
@@ -366,6 +374,34 @@
       .version strong {
         display: block;
         margin-bottom: 5px;
+        font-size: 13px;
+      }
+
+      .store-entry {
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .store-entry + .store-entry {
+        margin-top: 6px;
+      }
+
+      .store-entry.selected {
+        border-color: var(--blue);
+        box-shadow: inset 3px 0 0 var(--blue);
+      }
+
+      .store-key {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
+      .store-key strong {
         font-size: 13px;
       }
 
@@ -502,8 +538,7 @@
 
       @media (max-width: 980px) {
         .masthead,
-        .panel-body,
-        .sync-body {
+        .panel-body {
           grid-template-columns: 1fr;
         }
       }
@@ -530,12 +565,7 @@
         <span id="status" class="status">loading</span>
       </header>
 
-      <nav class="tabs" aria-label="demo tabs">
-        <button class="tab active" type="button" data-tab="request">요청 / 정족수</button>
-        <button class="tab" type="button" data-tab="sync">데이터 동기화</button>
-      </nav>
-
-      <section class="tab-panel active" data-panel="request">
+      <section>
         <div class="layout">
           <aside class="panel">
             <div class="panel-head">
@@ -561,11 +591,10 @@
                 <label>
                   <span class="empty">consistency preset</span>
                   <select id="quorum-preset-select">
-                    <option value="3:2">Balanced AP W=3 R=2</option>
-                    <option value="3:3">Overlap W=3 R=3</option>
-                    <option value="4:2">Write-heavy W=4 R=2</option>
-                    <option value="5:1">Fast read W=5 R=1</option>
-                    <option value="1:5">Fast write W=1 R=5</option>
+                    <option value="2:2">Balanced quorum W=2 R=2</option>
+                    <option value="3:1">Fast read W=3 R=1</option>
+                    <option value="1:3">Fast write W=1 R=3</option>
+                    <option value="2:1">Weak overlap W=2 R=1</option>
                     <option value="custom">Custom W/R</option>
                   </select>
                 </label>
@@ -581,6 +610,7 @@
               <div class="actions">
                 <button id="put-button" class="primary" type="button">PUT</button>
                 <button id="get-button" type="button">GET</button>
+                <button id="handoff-button" type="button">Hinted Handoff 수동 실행</button>
               </div>
               <div id="result" class="result">요청 결과가 여기에 표시됩니다.</div>
             </div>
@@ -593,45 +623,6 @@
           </section>
         </div>
       </section>
-
-      <section class="tab-panel" data-panel="sync">
-        <div class="layout">
-          <aside class="panel">
-            <div class="panel-head">
-              <h2>Sloppy Quorum / Hinted Handoff</h2>
-              <p>장애 중 실패한 replica write는 coordinator가 hint로 보관하고, 복구 후 자동으로 원래 노드에 전달합니다.</p>
-            </div>
-            <div class="panel-body sync-body">
-              <div class="field-row">
-                <label>
-                  <span class="empty">key</span>
-                  <input id="sync-key-input" value="cart:42" />
-                </label>
-                <label>
-                  <span class="empty">value</span>
-                  <input id="sync-value-input" value="book,pen" />
-                </label>
-                <label>
-                  <span class="empty">중재자 노드 (coordinator)</span>
-                  <select id="sync-target-node-select"></select>
-                </label>
-              </div>
-              <div class="actions">
-                <button id="sync-put-button" class="primary" type="button">PUT</button>
-                <button id="sync-get-button" type="button">GET</button>
-                <button id="handoff-button" type="button">Hinted Handoff 수동 실행</button>
-              </div>
-              <div id="sync-result" class="result">pending hint가 여기에 표시됩니다.</div>
-            </div>
-          </aside>
-
-          <section>
-            <div id="sync-cluster-meta" class="cluster-meta"></div>
-            <div id="sync-placement-summary" class="placement-summary"></div>
-            <div id="sync-node-grid" class="node-grid"></div>
-          </section>
-        </div>
-      </section>
     </main>
 
     <script>
@@ -640,44 +631,21 @@
         placement: null,
         selectedKey: "cart:42",
         targetNodeId: "A",
-        activeTab: "request",
         quorumUpdateInFlight: false,
       };
 
       document.addEventListener("DOMContentLoaded", () => {
-        bindTabs();
         bindControls();
         refresh();
         window.setInterval(refresh, 2500);
       });
 
-      function bindTabs() {
-        document.querySelectorAll("[data-tab]").forEach((button) => {
-          button.addEventListener("click", () => {
-            state.activeTab = button.dataset.tab;
-            document.querySelectorAll("[data-tab]").forEach((tab) => {
-              tab.classList.toggle("active", tab.dataset.tab === state.activeTab);
-            });
-            document.querySelectorAll("[data-panel]").forEach((panel) => {
-              panel.classList.toggle("active", panel.dataset.panel === state.activeTab);
-            });
-          });
-        });
-      }
-
       function bindControls() {
         document.getElementById("put-button").addEventListener("click", putValue);
         document.getElementById("get-button").addEventListener("click", getValue);
-        document.getElementById("sync-put-button").addEventListener("click", syncPutValue);
-        document.getElementById("sync-get-button").addEventListener("click", syncGetValue);
         document.getElementById("handoff-button").addEventListener("click", runHintedHandoff);
         document.getElementById("target-node-select").addEventListener("change", (event) => {
           state.targetNodeId = event.target.value;
-          document.getElementById("sync-target-node-select").value = state.targetNodeId;
-        });
-        document.getElementById("sync-target-node-select").addEventListener("change", (event) => {
-          state.targetNodeId = event.target.value;
-          document.getElementById("target-node-select").value = state.targetNodeId;
         });
         document.getElementById("quorum-preset-select").addEventListener("change", async (event) => {
           if (event.target.value === "custom") {
@@ -695,13 +663,6 @@
         document.getElementById("key-input").addEventListener("input", (event) => {
           state.selectedKey = event.target.value.trim();
           state.placement = null;
-          document.getElementById("sync-key-input").value = event.target.value;
-          render();
-        });
-        document.getElementById("sync-key-input").addEventListener("input", (event) => {
-          state.selectedKey = event.target.value.trim();
-          state.placement = null;
-          document.getElementById("key-input").value = event.target.value;
           render();
         });
       }
@@ -739,33 +700,6 @@
         const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv/${encodeURIComponent(key)}`);
         showResult(formatReadResult(result));
         await refresh();
-      }
-
-      async function syncPutValue() {
-        const key = document.getElementById("sync-key-input").value.trim();
-        const value = document.getElementById("sync-value-input").value.trim();
-        state.selectedKey = key;
-        document.getElementById("key-input").value = key;
-        const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key, value }),
-        });
-        const message = formatPutResult(result);
-        await refresh();
-        showResult(message);
-        showSyncResult(message);
-      }
-
-      async function syncGetValue() {
-        const key = document.getElementById("sync-key-input").value.trim();
-        state.selectedKey = key;
-        document.getElementById("key-input").value = key;
-        const result = await fetchJson(`/api/nodes/${encodeURIComponent(state.targetNodeId)}/kv/${encodeURIComponent(key)}`);
-        const message = formatReadResult(result);
-        await refresh();
-        showResult(message);
-        showSyncResult(message);
       }
 
       async function toggleNode(nodeId, available) {
@@ -806,7 +740,6 @@
         const message = formatHandoffResult(result);
         await refresh();
         showResult(message);
-        showSyncResult(message);
       }
 
       async function fetchJson(url, options = {}) {
@@ -825,26 +758,20 @@
         renderTargetOptions();
         renderQuorumControls();
         const nodes = state.snapshot.nodes.sort((left, right) => left.nodeId.localeCompare(right.nodeId));
+        const quorumTotal = state.snapshot.writeQuorum + state.snapshot.readQuorum;
+        const quorumOverlaps = quorumTotal > state.snapshot.replicationFactor;
+        const pendingHints = countPendingHints(nodes);
         document.getElementById("cluster-meta").innerHTML = [
-          metric("coordinator", state.snapshot.coordinatorNodeId),
-          metric("servers", state.snapshot.serverCount),
-          metric("vnodes", state.snapshot.tokenCount),
+          metric("cluster", `${state.snapshot.serverCount} servers / ${state.snapshot.replicationFactor} replicas`),
           metric("write quorum", `${state.snapshot.writeQuorum}/${state.snapshot.replicationFactor}`),
           metric("read quorum", `${state.snapshot.readQuorum}/${state.snapshot.replicationFactor}`),
-          metric("consistency", state.snapshot.writeQuorum + state.snapshot.readQuorum > state.snapshot.replicationFactor ? "overlap" : "stale possible"),
-        ].join("");
-        document.getElementById("sync-cluster-meta").innerHTML = [
-          metric("coordinator", state.snapshot.coordinatorNodeId),
-          metric("replicas/key", state.snapshot.replicationFactor),
-          metric("pending hints", countPendingHints(nodes)),
-          metric("quorum", `W${state.snapshot.writeQuorum} / R${state.snapshot.readQuorum}`),
-          metric("sync", countPendingHints(nodes) === 0 ? "clean" : "handoff needed"),
+          metric("quorum rule", `${quorumTotal} ${quorumOverlaps ? ">" : "<="} ${state.snapshot.replicationFactor}`),
+          metric("pending hints", pendingHints),
+          metric("read risk", quorumOverlaps ? "overlap" : "stale possible"),
         ].join("");
         renderPlacementSummary();
         const nodeHtml = nodes.map(renderNode).join("");
         document.getElementById("node-grid").innerHTML = nodeHtml;
-        document.getElementById("sync-node-grid").innerHTML = nodeHtml;
-        renderPendingHints(nodes);
       }
 
       function renderQuorumControls() {
@@ -866,7 +793,6 @@
 
       function renderTargetOptions() {
         const requestSelect = document.getElementById("target-node-select");
-        const syncSelect = document.getElementById("sync-target-node-select");
         const nodeIds = state.snapshot.nodes.map((node) => node.nodeId).sort();
         if (!nodeIds.includes(state.targetNodeId)) {
           state.targetNodeId = state.snapshot.coordinatorNodeId;
@@ -875,7 +801,6 @@
           .map((nodeId) => `<option value="${escapeHtml(nodeId)}" ${nodeId === state.targetNodeId ? "selected" : ""}>${escapeHtml(nodeId)} 중재자</option>`)
           .join("");
         requestSelect.innerHTML = options;
-        syncSelect.innerHTML = options;
       }
 
       function renderPlacementSummary() {
@@ -883,17 +808,17 @@
           ? [
               `<span class="placement-pill">key ${escapeHtml(state.placement.key)}</span>`,
               `<span class="placement-pill">hash ${escapeHtml(String(state.placement.keyHash))}</span>`,
+              `<span class="placement-pill">ring ${state.placement.tokenCount} tokens</span>`,
+              `<span class="placement-pill">${state.placement.virtualNodes} vnodes/node</span>`,
               ...state.placement.replicaNodes.map((nodeId, index) =>
                 `<span class="placement-pill">${index + 1}. Node ${escapeHtml(nodeId)}</span>`
               ),
             ].join("")
           : "";
         document.getElementById("placement-summary").innerHTML = html;
-        document.getElementById("sync-placement-summary").innerHTML = html;
       }
 
       function renderNode(node) {
-        const selectedVersions = node.store[state.selectedKey] || [];
         const hints = node.hints || [];
         const availabilityClass = node.available ? "ok" : "paused";
         const availabilityText = node.available ? "AVAILABLE" : "PAUSED";
@@ -910,10 +835,10 @@
             <div class="node-body">
               <div>
                 <div class="section-title">
-                  <h3>local store: <code>${escapeHtml(state.selectedKey)}</code></h3>
+                  <h3>local store</h3>
                   <button class="${node.available ? "danger" : ""}" type="button" onclick="toggleNode('${escapeJs(node.nodeId)}', ${!node.available})">${node.available ? "Pause" : "Resume"}</button>
                 </div>
-                ${selectedVersions.length === 0 ? '<p class="empty">이 key의 값이 없습니다.</p>' : selectedVersions.map(renderVersion).join("")}
+                ${renderLocalStore(node.store)}
               </div>
               <div>
                 <div class="section-title"><h3>pending hints</h3><span class="badge ${hints.length === 0 ? "ok" : "paused"}">${hints.length}</span></div>
@@ -936,12 +861,25 @@
         return Boolean(state.placement && state.placement.replicaNodes.includes(nodeId));
       }
 
-      function renderPendingHints(nodes) {
-        const hints = nodes.flatMap((node) => (node.hints || []).map((hint) => ({ ...hint, holderNodeId: node.nodeId })));
-        const content = hints.length === 0
-          ? "pending hint 없음"
-          : hints.map((hint) => `${hint.holderNodeId} -> ${hint.targetNodeId}: ${hint.key}=${hint.value} (${hint.versionId})`).join("\n");
-        showSyncResult(content);
+      function renderLocalStore(store) {
+        const entries = Object.entries(store || {}).sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey));
+        if (entries.length === 0) {
+          return '<p class="empty">empty store</p>';
+        }
+        return entries.map(([key, versions]) => renderStoreEntry(key, versions)).join("");
+      }
+
+      function renderStoreEntry(key, versions) {
+        const selected = key === state.selectedKey;
+        return `
+          <section class="store-entry ${selected ? "selected" : ""}">
+            <div class="store-key">
+              <strong><code>${escapeHtml(key)}</code></strong>
+              ${selected ? '<span class="badge ok">selected</span>' : ""}
+            </div>
+            ${(versions || []).map(renderVersion).join("")}
+          </section>
+        `;
       }
 
       function renderNodeHints(hints) {
@@ -1054,10 +992,6 @@
 
       function showResult(message) {
         document.getElementById("result").textContent = message;
-      }
-
-      function showSyncResult(message) {
-        document.getElementById("sync-result").textContent = message;
       }
 
       function setStatus(kind, label) {

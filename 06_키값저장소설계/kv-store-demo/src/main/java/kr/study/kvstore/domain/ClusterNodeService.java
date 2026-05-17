@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import kr.study.kvstore.config.DemoProperties;
 import org.springframework.http.ResponseEntity;
@@ -160,7 +161,8 @@ public class ClusterNodeService {
     public ReadResult get(String key) {
         requireAvailable();
         List<ReplicaRead> reads = new ArrayList<>();
-        for (ReplicaTarget target : readTargets(key)) {
+        int successfulReads = 0;
+        for (ReplicaTarget target : replicaTargets(key)) {
             try {
                 if (target.local()) {
                     reads.add(new ReplicaRead(target.nodeId(), true, siblings(key), "local read"));
@@ -174,6 +176,10 @@ public class ClusterNodeService {
                     reads.add(new ReplicaRead(target.nodeId(), true, body.versions(), "remote read"));
                     markPeerAlive(target.nodeId());
                 }
+                successfulReads++;
+                if (successfulReads >= readQuorum) {
+                    break;
+                }
             } catch (RestClientException exception) {
                 reads.add(new ReplicaRead(target.nodeId(), false, List.of(), "unreachable"));
                 markPeerSuspect(target.nodeId());
@@ -185,13 +191,12 @@ public class ClusterNodeService {
             .flatMap(read -> read.versions().stream())
             .toList();
         List<VersionedValue> reconciled = reconcile(versions);
-        long successfulReads = reads.stream().filter(ReplicaRead::ok).count();
         int requiredReadQuorum = readQuorum;
         boolean quorumReached = successfulReads >= requiredReadQuorum;
         boolean conflict = hasConflict(reconciled);
         log("GET " + key + " replicas " + reads.stream().map(ReplicaRead::nodeId).toList()
             + " -> " + successfulReads + "/" + requiredReadQuorum + " read quorum, versions " + reconciled.size());
-        return new ReadResult(key, reconciled, reads, (int) successfulReads, requiredReadQuorum, quorumReached, conflict, nodeId, nodeId, false);
+        return new ReadResult(key, reconciled, reads, successfulReads, requiredReadQuorum, quorumReached, conflict, nodeId, nodeId, false);
     }
 
     public ReadResult getFromNode(String targetNodeId, String key) {
@@ -234,22 +239,25 @@ public class ClusterNodeService {
         refreshFailureStatus();
         List<GossipPeerResult> results = new ArrayList<>();
         GossipMessage message = new GossipMessage(nodeId, membershipSnapshot());
-        for (Peer peer : peersByNodeId.values()) {
-            try {
-                ResponseEntity<GossipMessage> response = restTemplate.postForEntity(
-                    peer.endpoint() + "/internal/gossip",
-                    message,
-                    GossipMessage.class
-                );
-                mergeMembership(Objects.requireNonNull(response.getBody()).membership());
-                markPeerAlive(peer.nodeId());
-                results.add(new GossipPeerResult(peer.nodeId(), true, "membership exchanged"));
-            } catch (RestClientException exception) {
-                markPeerSuspect(peer.nodeId());
-                results.add(new GossipPeerResult(peer.nodeId(), false, "unreachable"));
-            }
+        Peer peer = randomGossipPeer();
+        if (peer == null) {
+            log("gossip round skipped: no peers");
+            return new GossipResult(nodeId, membershipSnapshot(), results);
         }
-        log("gossip round -> " + results.stream().filter(GossipPeerResult::ok).count() + " peers reached");
+        try {
+            ResponseEntity<GossipMessage> response = restTemplate.postForEntity(
+                peer.endpoint() + "/internal/gossip",
+                message,
+                GossipMessage.class
+            );
+            mergeMembership(Objects.requireNonNull(response.getBody()).membership());
+            markPeerAlive(peer.nodeId());
+            results.add(new GossipPeerResult(peer.nodeId(), true, "membership exchanged"));
+        } catch (RestClientException exception) {
+            markPeerSuspect(peer.nodeId());
+            results.add(new GossipPeerResult(peer.nodeId(), false, "unreachable"));
+        }
+        log("gossip round -> random peer " + peer.nodeId() + " " + (results.get(0).ok() ? "reached" : "unreachable"));
         return new GossipResult(nodeId, membershipSnapshot(), results);
     }
 
@@ -489,12 +497,6 @@ public class ClusterNodeService {
             .toList();
     }
 
-    private List<ReplicaTarget> readTargets(String key) {
-        return replicaTargets(key).stream()
-            .limit(readQuorum)
-            .toList();
-    }
-
     private ReplicaTarget targetFor(String targetNodeId) {
         if (nodeId.equals(targetNodeId)) {
             return new ReplicaTarget(targetNodeId, "self", true);
@@ -541,6 +543,14 @@ public class ClusterNodeService {
             .distinct()
             .sorted()
             .toList();
+    }
+
+    private Peer randomGossipPeer() {
+        List<Peer> peers = List.copyOf(peersByNodeId.values());
+        if (peers.isEmpty()) {
+            return null;
+        }
+        return peers.get(ThreadLocalRandom.current().nextInt(peers.size()));
     }
 
     private void addHint(String targetNodeId, VersionedValue version) {

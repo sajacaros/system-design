@@ -10,9 +10,9 @@ spring:
 demo:
   node-id: ${NODE_ID:A}
   peers: ${PEERS:}
-  replication-factor: ${REPLICATION_FACTOR:5}
+  replication-factor: ${REPLICATION_FACTOR:3}
   virtual-nodes: ${VIRTUAL_NODES:16}
-  write-quorum: ${WRITE_QUORUM:3}
+  write-quorum: ${WRITE_QUORUM:2}
   read-quorum: ${READ_QUORUM:2}
   gossip:
     suspect-after-ms: ${SUSPECT_AFTER_MS:5000}

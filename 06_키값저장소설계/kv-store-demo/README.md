@@ -1,74 +1,132 @@
-# Distributed Key-Value Store Demo
+# 분산 키-값 저장소 데모
 
-Spring Boot demo for chapter 6 key-value store synchronization.
+6장 키-값 저장소 설계 내용을 눈으로 확인하기 위한 Spring Boot 데모입니다.
 
-The demo runs ten independent nodes:
+이 데모는 독립적인 Spring Boot 노드 5개를 Docker Compose로 실행합니다.
 
 - `A`: http://localhost:7906
 - `B`: http://localhost:7916
 - `C`: http://localhost:7926
 - `D`: http://localhost:7936
 - `E`: http://localhost:7946
-- `F`: http://localhost:7956
-- `G`: http://localhost:7966
-- `H`: http://localhost:7976
-- `I`: http://localhost:7986
-- `J`: http://localhost:7996
 
-Each key is mapped onto a SHA-256 consistent hash ring with virtual nodes. The default ring uses 16 virtual nodes per physical node, so the ten-node cluster has 160 ring tokens.
+브라우저는 보통 `A` 노드인 http://localhost:7906 으로 열면 됩니다. 화면에서 요청을 보낼 coordinator 노드는 따로 선택할 수 있습니다.
 
-Default quorum settings:
+## 핵심 개념
+
+각 key는 SHA-256 기반 consistent hash ring에 배치됩니다. 기본 설정은 물리 노드 1개당 virtual node 16개이므로, 5개 서버 클러스터에는 총 80개의 ring token이 있습니다.
+
+key 하나가 저장될 노드는 hash ring으로 결정됩니다. 기본 복제 계수는 `N=3`이므로, 전체 5개 노드 중 key마다 3개 노드만 replica owner가 됩니다.
+
+예를 들어 `cart:42`의 replica owner가 `B`, `D`, `A`라면:
 
 ```text
-servers = 10
-N = 5 replicas per key
-W = 3
-R = 2
+PUT cart:42=book
+-> B, D, A에만 저장
+-> C, E에는 저장하지 않음
 ```
 
-`N` means the number of nodes that store a specific key, not the total server count. Because `W + R = N`, the read quorum and write quorum do not always overlap. That makes stale reads possible.
+화면의 `placement` 영역은 현재 입력한 key가 hash ring에서 어느 노드들에 저장되는지 보여줍니다. 각 노드 카드의 `local store`는 그 노드가 실제로 가진 key/value 목록입니다.
 
-You can change `W` and `R` from the UI. Presets are provided for common trade-offs:
+## 기본 설정
 
-- `W=3, R=2`: stale reads are possible
-- `W=3, R=3`: read/write quorums overlap
-- `W=5, R=1`: read optimized, write requires every replica for that key
-- `W=1, R=5`: write optimized, read checks every replica for that key
+```text
+servers = 5
+N = 3 replicas per key
+W = 2
+R = 2
+virtual nodes = 16 per physical node
+```
 
-## Run
+여기서 `N`은 전체 서버 수가 아니라, 특정 key를 저장하는 replica 수입니다. 기본값에서는 `W + R > N`이므로 성공한 write quorum과 read quorum이 최소 하나 이상의 replica에서 겹칩니다.
+
+UI에서 `W`와 `R`을 바꿀 수 있습니다.
+
+- `W=2, R=2`: 읽기/쓰기 quorum이 겹치는 균형 설정
+- `W=3, R=1`: 읽기는 빠르지만 write가 모든 replica ack를 요구
+- `W=1, R=3`: write는 빠르지만 read가 모든 replica를 확인
+- `W=2, R=1`: 지연은 낮지만 `W + R = N`이라 stale read 가능
+
+## 실행 방법
+
+먼저 JAR를 새로 만든 뒤 Docker Compose를 올립니다.
 
 ```bash
 ./gradlew bootJar
-docker compose up --build
+docker compose up -d --build
 ```
 
-Open http://localhost:7906.
+Windows PowerShell에서는 다음처럼 실행할 수 있습니다.
 
-## Stale Read Scenario
+```powershell
+.\gradlew.bat bootJar
+docker compose up -d --build
+```
 
-1. Keep all nodes available and use key `cart:42`.
-2. The UI shows the five replica owners for the selected key. Note the first three and last two owners.
-3. `PUT cart:42=book` through any coordinator.
-4. Pause the last two replica owner nodes shown in the placement row.
-5. Change the value to `book,pen` and `PUT` through any available coordinator.
-6. The write can reach quorum with the first three owners; the paused owners miss the new version.
-7. Resume the paused owners.
-8. Run `GET cart:42`. With `R=2`, a read that checks only stale owners can return the old value.
+상태 확인:
 
-Then switch the preset to `W=3, R=3` and repeat the read. Since `W + R > N`, the read quorum overlaps the successful write quorum.
+```bash
+docker compose ps
+```
 
-## Hinted Handoff Scenario
+종료:
 
-1. Keep `W=3, R=2`.
-2. Use the placement row to identify the replica owners for `cart:42`.
-3. Pause two replica owner nodes.
-4. `PUT cart:42=book,pen` through any available coordinator.
-5. The coordinator stores pending hints for unavailable replica owners.
-6. Resume the paused nodes.
-7. Open the `Data Sync` tab and watch the pending hints.
-8. The coordinator retries hinted handoff automatically, so the missed replicas catch up after a short delay.
-9. You can also run `Hinted Handoff` manually from the tab to force an immediate retry.
+```bash
+docker compose down
+```
 
-## Local Process Run
+## Quorum Overlap 확인
 
-Running all ten nodes locally is verbose. Docker Compose is the recommended path. For local debugging, start one process per node with the same `NODE_ID`, `SERVER_PORT`, `PEERS`, `REPLICATION_FACTOR=5`, `VIRTUAL_NODES=16`, `WRITE_QUORUM=3`, and `READ_QUORUM=2` values shown in `docker-compose.yml`.
+1. 모든 노드를 `AVAILABLE` 상태로 둡니다.
+2. key를 `cart:42`로 둡니다.
+3. 화면의 placement 영역에서 `cart:42`의 replica owner 3개를 확인합니다.
+4. `PUT cart:42=book`을 실행합니다.
+5. replica owner 중 하나를 `Pause`합니다.
+6. value를 `book,pen`으로 바꾸고 다시 `PUT`합니다.
+7. 기본 설정 `W=2, R=2`에서는 replica 2개의 ack만 받아도 write quorum이 성립합니다.
+8. `GET cart:42`를 실행하면 read quorum도 2개 replica를 읽으므로, 성공한 write quorum과 겹치는 replica를 읽게 됩니다.
+
+stale read 위험을 보고 싶다면 preset을 `W=2, R=1`로 바꿔 같은 흐름을 반복합니다. 이 경우 `W + R = N`이라 read quorum이 write quorum과 겹치지 않을 수 있습니다.
+
+## Hinted Handoff 확인
+
+1. `W=2, R=2`로 둡니다.
+2. key를 `cart:42`로 둡니다.
+3. placement 영역에서 replica owner 3개를 확인합니다.
+4. replica owner 중 하나를 `Pause`합니다.
+5. `PUT cart:42=book,pen`을 실행합니다.
+6. coordinator는 도달하지 못한 replica owner에 전달할 pending hint를 저장합니다.
+7. 멈췄던 노드를 `Resume`합니다.
+8. hinted handoff는 주기적으로 자동 재시도되며, 필요하면 `Hinted Handoff 수동 실행` 버튼으로 즉시 재시도할 수 있습니다.
+
+각 노드 카드의 `pending hints`에서 아직 전달되지 않은 hint 수와 내용을 확인할 수 있습니다.
+
+## 화면에서 볼 것
+
+- `placement`: 현재 입력한 key의 hash 값과 replica owner 목록
+- `local store`: 각 노드가 실제로 저장 중인 key/value 목록
+- `selected`: 현재 입력한 key가 해당 노드의 local store에 실제로 있을 때 표시
+- `pending hints`: 장애 중 전달하지 못해 나중에 재전송할 replica write
+- `membership`: gossip/heartbeat 기준으로 본 노드 상태
+- `events`: 해당 노드에서 발생한 PUT, GET, hint 저장/전달 이벤트
+
+key 입력값을 바꾸면 placement는 즉시 새 key 기준으로 다시 계산됩니다. 하지만 `local store`는 실제 저장소 내용이므로, PUT 전에는 새 key가 저장소에 생기지 않습니다.
+
+## 로컬 프로세스로 직접 실행
+
+여러 노드를 로컬 프로세스로 직접 띄우는 것도 가능하지만 환경 변수를 맞춰야 해서 번거롭습니다. 일반적인 확인은 Docker Compose를 권장합니다.
+
+직접 실행하려면 노드마다 다음 값을 다르게 지정해야 합니다.
+
+- `NODE_ID`
+- `SERVER_PORT`
+- `PEERS`
+
+그리고 모든 노드에서 아래 값은 같은 클러스터 설정으로 맞춥니다.
+
+- `REPLICATION_FACTOR=3`
+- `VIRTUAL_NODES=16`
+- `WRITE_QUORUM=2`
+- `READ_QUORUM=2`
+
+구체적인 값은 `docker-compose.yml`의 각 서비스 설정을 기준으로 보면 됩니다.

@@ -4,10 +4,10 @@ services:
     environment:
       NODE_ID: A
       SERVER_PORT: 7906
-      PEERS: B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
+      PEERS: B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946
+      REPLICATION_FACTOR: 3
       VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
+      WRITE_QUORUM: 2
       READ_QUORUM: 2
     ports:
       - "7906:7906"
@@ -17,10 +17,10 @@ services:
     environment:
       NODE_ID: B
       SERVER_PORT: 7916
-      PEERS: A=http://node-a:7906,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
+      PEERS: A=http://node-a:7906,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946
+      REPLICATION_FACTOR: 3
       VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
+      WRITE_QUORUM: 2
       READ_QUORUM: 2
     ports:
       - "7916:7916"
@@ -30,10 +30,10 @@ services:
     environment:
       NODE_ID: C
       SERVER_PORT: 7926
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
+      PEERS: A=http://node-a:7906,B=http://node-b:7916,D=http://node-d:7936,E=http://node-e:7946
+      REPLICATION_FACTOR: 3
       VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
+      WRITE_QUORUM: 2
       READ_QUORUM: 2
     ports:
       - "7926:7926"
@@ -43,10 +43,10 @@ services:
     environment:
       NODE_ID: D
       SERVER_PORT: 7936
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
+      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,E=http://node-e:7946
+      REPLICATION_FACTOR: 3
       VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
+      WRITE_QUORUM: 2
       READ_QUORUM: 2
     ports:
       - "7936:7936"
@@ -56,75 +56,10 @@ services:
     environment:
       NODE_ID: E
       SERVER_PORT: 7946
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
+      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936
+      REPLICATION_FACTOR: 3
       VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
+      WRITE_QUORUM: 2
       READ_QUORUM: 2
     ports:
       - "7946:7946"
-
-  node-f:
-    build: .
-    environment:
-      NODE_ID: F
-      SERVER_PORT: 7956
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
-      VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
-      READ_QUORUM: 2
-    ports:
-      - "7956:7956"
-
-  node-g:
-    build: .
-    environment:
-      NODE_ID: G
-      SERVER_PORT: 7966
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,H=http://node-h:7976,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
-      VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
-      READ_QUORUM: 2
-    ports:
-      - "7966:7966"
-
-  node-h:
-    build: .
-    environment:
-      NODE_ID: H
-      SERVER_PORT: 7976
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,I=http://node-i:7986,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
-      VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
-      READ_QUORUM: 2
-    ports:
-      - "7976:7976"
-
-  node-i:
-    build: .
-    environment:
-      NODE_ID: I
-      SERVER_PORT: 7986
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,J=http://node-j:7996
-      REPLICATION_FACTOR: 5
-      VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
-      READ_QUORUM: 2
-    ports:
-      - "7986:7986"
-
-  node-j:
-    build: .
-    environment:
-      NODE_ID: J
-      SERVER_PORT: 7996
-      PEERS: A=http://node-a:7906,B=http://node-b:7916,C=http://node-c:7926,D=http://node-d:7936,E=http://node-e:7946,F=http://node-f:7956,G=http://node-g:7966,H=http://node-h:7976,I=http://node-i:7986
-      REPLICATION_FACTOR: 5
-      VIRTUAL_NODES: 16
-      WRITE_QUORUM: 3
-      READ_QUORUM: 2
-    ports:
-      - "7996:7996"
