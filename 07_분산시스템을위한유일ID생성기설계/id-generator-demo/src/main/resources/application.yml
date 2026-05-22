@@ -1,0 +1,15 @@
+server:
+  port: ${SERVER_PORT:7707}
+
+spring:
+  application:
+    name: id-generator-demo
+  thymeleaf:
+    cache: false
+
+demo:
+  node-id: ${NODE_ID:A}
+  datacenter-id: ${DATACENTER_ID:1}
+  worker-id: ${WORKER_ID:1}
+  peers: ${PEERS:}
+  default-batch-size: ${DEFAULT_BATCH_SIZE:5}

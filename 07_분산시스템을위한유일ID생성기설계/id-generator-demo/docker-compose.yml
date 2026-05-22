@@ -1,0 +1,33 @@
+services:
+  node-a:
+    build: .
+    environment:
+      NODE_ID: A
+      DATACENTER_ID: 1
+      WORKER_ID: 1
+      SERVER_PORT: 7707
+      PEERS: B=http://node-b:7717,C=http://node-c:7727
+    ports:
+      - "7707:7707"
+
+  node-b:
+    build: .
+    environment:
+      NODE_ID: B
+      DATACENTER_ID: 1
+      WORKER_ID: 2
+      SERVER_PORT: 7717
+      PEERS: A=http://node-a:7707,C=http://node-c:7727
+    ports:
+      - "7717:7717"
+
+  node-c:
+    build: .
+    environment:
+      NODE_ID: C
+      DATACENTER_ID: 1
+      WORKER_ID: 3
+      SERVER_PORT: 7727
+      PEERS: A=http://node-a:7707,B=http://node-b:7717
+    ports:
+      - "7727:7727"

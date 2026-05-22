@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snowflake ID Generator Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --text: #20242a;
+        --muted: #626c76;
+        --line: #d9e0e7;
+        --soft: #f6f8fb;
+        --blue: #0969da;
+        --green: #1a7f37;
+        --red: #cf222e;
+        --amber: #9a6700;
+        --teal: #067d68;
+        --ink: #111827;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      button,
+      input {
+        min-height: 38px;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      button {
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        color: var(--text);
+        background: #ffffff;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: var(--blue);
+        color: #ffffff;
+        background: var(--blue);
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.64;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: var(--soft);
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 0.94em;
+      }
+
+      .shell {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: end;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .masthead h1 {
+        font-size: 26px;
+        line-height: 1.2;
+      }
+
+      .masthead p {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .status {
+        min-width: 96px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: var(--green);
+        background: #dafbe1;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .status.fail {
+        color: var(--red);
+        background: #ffebe9;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 360px) auto minmax(260px, 1fr);
+        gap: 10px;
+        align-items: end;
+        margin-top: 14px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+
+      .field span {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .summary {
+        min-height: 52px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .node-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .node {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .node-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 11px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfe;
+      }
+
+      .node h2 {
+        font-size: 16px;
+      }
+
+      .node small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .badge {
+        display: inline-flex;
+        min-width: 54px;
+        justify-content: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        color: #ffffff;
+        background: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .badge.ok {
+        background: var(--green);
+      }
+
+      .badge.fail {
+        background: var(--red);
+      }
+
+      .node-body {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+      }
+
+      .node-meta {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+      }
+
+      .metric {
+        min-height: 58px;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+        font-weight: 800;
+      }
+
+      .recent {
+        display: grid;
+        gap: 5px;
+        min-height: 86px;
+      }
+
+      .recent-line {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 7px;
+        border: 1px solid #e8edf3;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .recent-line code {
+        color: var(--ink);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(420px, 0.78fr);
+        gap: 12px;
+        align-items: start;
+        margin-top: 12px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfe;
+      }
+
+      .panel-head h2 {
+        font-size: 16px;
+      }
+
+      .table-wrap {
+        max-height: 560px;
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 8px 7px;
+        border-bottom: 1px solid #edf1f5;
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        color: var(--muted);
+        background: #ffffff;
+        font-size: 12px;
+      }
+
+      td.id-cell {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        color: var(--ink);
+      }
+
+      .node-chip {
+        display: inline-flex;
+        min-width: 28px;
+        justify-content: center;
+        padding: 3px 7px;
+        border-radius: 999px;
+        color: #ffffff;
+        background: var(--blue);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .node-chip.B {
+        background: var(--teal);
+      }
+
+      .node-chip.C {
+        background: var(--amber);
+      }
+
+      .bit-layout {
+        display: grid;
+        grid-template-columns: 0.35fr 2.4fr 0.75fr 0.75fr 0.85fr;
+        gap: 5px;
+        padding: 12px;
+      }
+
+      .bit {
+        min-height: 54px;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+
+      .bit strong {
+        display: block;
+        font-size: 12px;
+      }
+
+      .bit span {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .empty {
+        padding: 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 1100px) {
+        .toolbar,
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .node-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          padding: 12px;
+        }
+
+        .masthead {
+          grid-template-columns: 1fr;
+        }
+
+        .node-meta,
+        .bit-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div>
+          <h1>Snowflake 고유 ID 생성기 데모</h1>
+          <p>3개의 Spring Boot 서버가 각자 다른 worker ID로 64비트 ID를 만듭니다. 노드별로는 이전 응답을 기다린 뒤 다음 단건 API를 보내고, 응답 직전 랜덤 지연으로 완료 순서와 ID 정렬 순서를 갈라놓습니다.</p>
+        </div>
+        <span id="status" class="status">loading</span>
+      </header>
+
+      <section class="toolbar">
+        <label class="field">
+          <span>서버당 생성 개수</span>
+          <input id="count-input" type="number" min="1" max="200" value="5" />
+        </label>
+        <div class="actions">
+          <button id="cluster-button" class="primary" type="button">3개 서버에서 생성</button>
+          <button id="local-button" type="button">현재 서버만 생성</button>
+        </div>
+        <div id="summary" class="summary">생성 결과가 여기에 표시됩니다.</div>
+      </section>
+
+      <section id="node-grid" class="node-grid"></section>
+
+      <section class="layout">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>ID 정렬 순서</h2>
+            <span id="sorted-count" class="badge ok">0</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>ID</th>
+                  <th>Node</th>
+                  <th>ID 생성시각</th>
+                  <th>DC</th>
+                  <th>Worker</th>
+                  <th>Seq</th>
+                  <th>API 호출</th>
+                  <th>완료</th>
+                  <th>Delay</th>
+                </tr>
+              </thead>
+              <tbody id="sorted-body">
+                <tr><td class="empty" colspan="10">아직 생성된 ID가 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>요청 완료 순서</h2>
+            <span id="arrival-count" class="badge">0</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>완료</th>
+                  <th>API 호출</th>
+                  <th>Delay</th>
+                  <th>ID</th>
+                  <th>Node</th>
+                  <th>ID 생성시각</th>
+                  <th>Worker</th>
+                  <th>Seq</th>
+                </tr>
+              </thead>
+              <tbody id="arrival-body">
+                <tr><td class="empty" colspan="8">버튼을 눌러 3개 서버의 결과를 비교해보세요.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel" style="margin-top: 12px">
+        <div class="panel-head">
+          <h2>64비트 구성</h2>
+          <span id="epoch" class="badge">epoch</span>
+        </div>
+        <div id="bit-layout" class="bit-layout"></div>
+      </section>
+    </main>
+
+    <script>
+      const state = {
+        snapshot: null,
+        lastResult: null,
+        loading: false,
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("cluster-button").addEventListener("click", generateCluster);
+        document.getElementById("local-button").addEventListener("click", generateLocal);
+        refresh();
+        window.setInterval(refresh, 2500);
+      });
+
+      async function refresh() {
+        try {
+          state.snapshot = await fetchJson("/api/state");
+          setStatus("ready", false);
+          render();
+        } catch (error) {
+          setStatus("offline", true);
+          document.getElementById("summary").textContent = "상태 조회 실패: " + error.message;
+        }
+      }
+
+      async function generateCluster() {
+        await runAction(async () => {
+          const countPerNode = readCount();
+          state.lastResult = await fetchJson("/api/generate-cluster", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ countPerNode }),
+          });
+          renderResult();
+          await refresh();
+        });
+      }
+
+      async function generateLocal() {
+        await runAction(async () => {
+          const count = readCount();
+          const batch = await fetchJson("/api/generate-local", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ count }),
+          });
+          state.lastResult = {
+            requestedAt: new Date().toISOString(),
+            countPerNode: count,
+            nodes: [batch],
+            arrivalOrder: batch.generated.map((id, index) => ({
+              requestOrder: index + 1,
+              arrivalOrder: index + 1,
+              sortedOrder: 0,
+              responseDelayMillis: batch.responseDelayMillis,
+              id,
+            })),
+            sortedById: batch.generated.map((id, index) => ({
+              requestOrder: index + 1,
+              arrivalOrder: index + 1,
+              sortedOrder: index + 1,
+              responseDelayMillis: batch.responseDelayMillis,
+              id,
+            })),
+            timeOrdered: true,
+            orderingRule: "단일 노드에서는 timestamp와 sequence 증가로 정렬됩니다.",
+          };
+          renderResult();
+          await refresh();
+        });
+      }
+
+      async function runAction(action) {
+        state.loading = true;
+        setButtons(true);
+        try {
+          await action();
+        } catch (error) {
+          document.getElementById("summary").textContent = "요청 실패: " + error.message;
+        } finally {
+          state.loading = false;
+          setButtons(false);
+        }
+      }
+
+      async function fetchJson(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `HTTP ${response.status}`);
+        }
+        return response.json();
+      }
+
+      function render() {
+        if (!state.snapshot) {
+          return;
+        }
+        const countInput = document.getElementById("count-input");
+        if (!countInput.dataset.initialized) {
+          countInput.value = state.snapshot.defaultBatchSize;
+          countInput.dataset.initialized = "true";
+        }
+        renderNodes();
+        renderBits();
+      }
+
+      function renderNodes() {
+        const nodes = [...state.snapshot.nodes].sort((left, right) => left.nodeId.localeCompare(right.nodeId));
+        document.getElementById("node-grid").innerHTML = nodes.map((node) => `
+          <article class="node">
+            <div class="node-head">
+              <div>
+                <h2>Node ${escapeHtml(node.nodeId)}</h2>
+                <small>${escapeHtml(node.endpoint === "self" ? "local server" : node.endpoint)}</small>
+              </div>
+              <span class="badge ${node.ok ? "ok" : "fail"}">${node.ok ? "READY" : "DOWN"}</span>
+            </div>
+            <div class="node-body">
+              <div class="node-meta">
+                ${metric("datacenter", node.datacenterId < 0 ? "-" : node.datacenterId)}
+                ${metric("worker", node.workerId < 0 ? "-" : node.workerId)}
+                ${metric("recent", node.recentCount)}
+              </div>
+              <div class="recent">
+                ${renderRecent(node)}
+              </div>
+            </div>
+          </article>
+        `).join("");
+      }
+
+      function renderRecent(node) {
+        if (!node.ok) {
+          return `<p class="empty">${escapeHtml(node.message)}</p>`;
+        }
+        if (!node.recent || node.recent.length === 0) {
+          return '<p class="empty">아직 생성된 ID가 없습니다.</p>';
+        }
+        return node.recent.slice(0, 3).map((id) => `
+          <div class="recent-line">
+            <code>${escapeHtml(id.id)}</code>
+            <span>${escapeHtml(formatTime(id.timestampIso))}</span>
+          </div>
+        `).join("");
+      }
+
+      function renderBits() {
+        const layout = state.snapshot.bitLayout;
+        document.getElementById("epoch").textContent = "epoch " + state.snapshot.customEpochIso.replace(".000Z", "Z");
+        document.getElementById("bit-layout").innerHTML = [
+          bit("sign", layout.sign, "항상 0"),
+          bit("timestamp", layout.timestamp, "custom epoch 이후 ms"),
+          bit("datacenter", layout.datacenter, "데이터센터"),
+          bit("worker", layout.worker, "서버"),
+          bit("sequence", layout.sequence, "같은 ms 안의 순번"),
+        ].join("");
+      }
+
+      function renderResult() {
+        if (!state.lastResult) {
+          return;
+        }
+        const okNodes = state.lastResult.nodes.filter((node) => node.ok).length;
+        const totalIds = state.lastResult.sortedById.length;
+        const failedNodes = state.lastResult.nodes.filter((node) => !node.ok);
+        const failureText = failedNodes.length === 0
+          ? ""
+          : " 실패: " + failedNodes.map((node) => `${node.nodeId}(${node.message})`).join(", ");
+        document.getElementById("summary").textContent =
+          `${okNodes}/${state.lastResult.nodes.length}개 서버에 총 ${state.lastResult.arrivalOrder.length}번 단건 API 호출, ${totalIds}개 ID 생성. ` +
+          `각 노드는 응답을 받은 뒤 다음 요청을 시작합니다. ` +
+          `${state.lastResult.timeOrdered ? "ID 정렬 결과의 timestamp가 역행하지 않습니다." : "timestamp 역행이 감지되었습니다."}` +
+          failureText;
+        document.getElementById("sorted-count").textContent = String(totalIds);
+        document.getElementById("arrival-count").textContent = String(state.lastResult.arrivalOrder.length);
+        document.getElementById("sorted-body").innerHTML = renderRows(state.lastResult.sortedById, true);
+        document.getElementById("arrival-body").innerHTML = renderRows(state.lastResult.arrivalOrder, false);
+      }
+
+      function renderRows(rows, sorted) {
+        if (!rows || rows.length === 0) {
+          const colspan = sorted ? 10 : 8;
+          return `<tr><td class="empty" colspan="${colspan}">생성된 ID가 없습니다.</td></tr>`;
+        }
+        return rows.map((row, index) => {
+          const id = row.id;
+          const rank = sorted ? row.sortedOrder : row.arrivalOrder;
+          const cells = sorted
+            ? `
+              <td>${rank}</td>
+              <td class="id-cell">${escapeHtml(id.id)}</td>
+              <td>${nodeChip(id.nodeId)}</td>
+              <td>${escapeHtml(formatTime(id.timestampIso))}</td>
+              <td>${id.datacenterId}</td>
+              <td>${id.workerId}</td>
+              <td>${id.sequence}</td>
+              <td>${row.requestOrder}</td>
+              <td>${row.arrivalOrder}</td>
+              <td>${row.responseDelayMillis}ms</td>
+            `
+            : `
+              <td>${rank || index + 1}</td>
+              <td>${row.requestOrder || "-"}</td>
+              <td>${row.responseDelayMillis || 0}ms</td>
+              <td class="id-cell">${escapeHtml(id.id)}</td>
+              <td>${nodeChip(id.nodeId)}</td>
+              <td>${escapeHtml(formatTime(id.timestampIso))}</td>
+              <td>${id.workerId}</td>
+              <td>${id.sequence}</td>
+            `;
+          return `<tr>${cells}</tr>`;
+        }).join("");
+      }
+
+      function readCount() {
+        const value = Number(document.getElementById("count-input").value);
+        if (!Number.isFinite(value)) {
+          return 5;
+        }
+        return Math.max(1, Math.min(200, Math.floor(value)));
+      }
+
+      function setButtons(disabled) {
+        document.getElementById("cluster-button").disabled = disabled;
+        document.getElementById("local-button").disabled = disabled;
+      }
+
+      function setStatus(label, failed) {
+        const element = document.getElementById("status");
+        element.textContent = state.loading ? "working" : label;
+        element.className = failed ? "status fail" : "status";
+      }
+
+      function metric(label, value) {
+        return `<section class="metric"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(String(value))}</span></section>`;
+      }
+
+      function bit(label, bits, detail) {
+        return `<section class="bit"><strong>${escapeHtml(label)} ${bits}bit</strong><span>${escapeHtml(detail)}</span></section>`;
+      }
+
+      function nodeChip(nodeId) {
+        return `<span class="node-chip ${escapeHtml(nodeId)}">${escapeHtml(nodeId)}</span>`;
+      }
+
+      function formatTime(value) {
+        if (!value) {
+          return "-";
+        }
+        const date = new Date(value);
+        return date.toLocaleTimeString("ko-KR", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          fractionalSecondDigits: 3,
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>
