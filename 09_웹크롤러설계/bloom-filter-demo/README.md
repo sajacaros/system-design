@@ -2,7 +2,7 @@
 
 ## 문서
 
-- Bloom filter 원리 설명: `docs/index.html`
+- Bloom filter 원리 설명: `docs/bloomFilter.html`
 
 9장 웹 크롤러 설계에서 방문한 URL 중복 검사용으로 언급되는 Bloom filter를 직접 확인하는 Spring Boot 데모입니다.
 
