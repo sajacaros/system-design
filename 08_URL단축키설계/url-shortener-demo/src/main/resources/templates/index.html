@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>URL Shortener Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --text: #1f2328;
+        --muted: #667085;
+        --line: #d8dee4;
+        --soft: #f6f8fa;
+        --blue: #0969da;
+        --green: #1a7f37;
+        --red: #cf222e;
+        --amber: #9a6700;
+        --teal: #067d68;
+        --violet: #8250df;
+        --ink: #0f172a;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      button,
+      input,
+      select {
+        min-height: 38px;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      button {
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        color: var(--text);
+        background: #ffffff;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: var(--blue);
+        color: #ffffff;
+        background: var(--blue);
+      }
+
+      button.danger {
+        border-color: #ffb3b8;
+        color: var(--red);
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.64;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 0.94em;
+      }
+
+      .shell {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .masthead h1 {
+        font-size: 26px;
+        line-height: 1.2;
+      }
+
+      .masthead p {
+        margin-top: 7px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .status {
+        min-width: 92px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: var(--green);
+        background: #dafbe1;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .status.fail {
+        color: var(--red);
+        background: #ffebe9;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(320px, 1fr) 210px auto;
+        gap: 10px;
+        align-items: end;
+        margin-top: 14px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+
+      .field span {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .metric {
+        min-height: 70px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 6px;
+        overflow-wrap: anywhere;
+        color: var(--ink);
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(460px, 1.1fr);
+        gap: 12px;
+        align-items: start;
+        margin-top: 12px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        min-height: 46px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfe;
+      }
+
+      .panel-head h2 {
+        font-size: 16px;
+      }
+
+      .body {
+        padding: 12px;
+      }
+
+      .result {
+        display: grid;
+        gap: 8px;
+      }
+
+      .result-card {
+        display: grid;
+        gap: 7px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .result-card strong {
+        font-size: 13px;
+      }
+
+      .result-card a {
+        color: var(--blue);
+        overflow-wrap: anywhere;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 25px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--soft);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .pill.hash {
+        color: var(--violet);
+        background: #f5f0ff;
+      }
+
+      .pill.id {
+        color: var(--teal);
+        background: #ddf4ee;
+      }
+
+      .pill.warn {
+        color: var(--amber);
+        background: #fff8c5;
+      }
+
+      .table-wrap {
+        max-height: 600px;
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 8px 7px;
+        border-bottom: 1px solid #edf1f5;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        color: var(--muted);
+        background: #ffffff;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      td {
+        overflow-wrap: anywhere;
+      }
+
+      td.nowrap {
+        white-space: nowrap;
+      }
+
+      .empty {
+        padding: 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .trace {
+        display: grid;
+        gap: 7px;
+      }
+
+      .trace-line {
+        padding: 8px;
+        border: 1px solid #edf1f5;
+        border-radius: 7px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .trace-line strong {
+        color: var(--text);
+      }
+
+      @media (max-width: 1120px) {
+        .toolbar,
+        .layout,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          padding: 12px;
+        }
+
+        .masthead {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div>
+          <h1>URL 단축 데모</h1>
+          <p>해시 충돌 해소와 Snowflake ID + Base62 변환을 같은 화면에서 비교합니다.</p>
+        </div>
+        <span id="status" class="status">loading</span>
+      </header>
+
+      <section class="toolbar">
+        <label class="field">
+          <span>긴 URL</span>
+          <input id="long-url" type="url" value="https://example.com/articles/system-design-url-shortener?chapter=8" />
+        </label>
+        <label class="field">
+          <span>생성 방식</span>
+          <select id="strategy">
+            <option value="HASH">Hash + collision retry</option>
+            <option value="ID_BASE62">Snowflake ID + Base62</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button id="shorten-button" class="primary" type="button">단축</button>
+          <button id="collision-button" type="button">충돌 데모</button>
+          <button id="reset-button" class="danger" type="button">초기화</button>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <article class="metric"><strong>전체 매핑</strong><span id="metric-total">0</span></article>
+        <article class="metric"><strong>해시 방식</strong><span id="metric-hash">0</span></article>
+        <article class="metric"><strong>ID 방식</strong><span id="metric-id">0</span></article>
+        <article class="metric"><strong>리디렉션</strong><span id="metric-redirect">0</span></article>
+        <article class="metric"><strong>Snowflake worker</strong><span id="metric-worker">-</span></article>
+      </section>
+
+      <section class="layout">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>최근 결과</h2>
+            <span id="result-badge" class="pill">idle</span>
+          </div>
+          <div class="body">
+            <div id="result" class="result">
+              <p class="empty">아직 생성된 단축 URL이 없습니다.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>저장소</h2>
+            <span id="mapping-count" class="pill">0</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Code</th>
+                  <th>방식</th>
+                  <th>긴 URL</th>
+                  <th>세부값</th>
+                  <th>Redirect</th>
+                </tr>
+              </thead>
+              <tbody id="mapping-body">
+                <tr><td class="empty" colspan="6">매핑이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel" style="margin-top: 12px">
+        <div class="panel-head">
+          <h2>충돌 추적</h2>
+          <span id="trace-count" class="pill warn">0</span>
+        </div>
+        <div id="trace" class="body trace">
+          <p class="empty">충돌 이벤트가 없습니다.</p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const state = {
+        snapshot: null,
+        lastResult: null,
+        lastTrace: [],
+        loading: false,
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("shorten-button").addEventListener("click", shorten);
+        document.getElementById("collision-button").addEventListener("click", collisionDemo);
+        document.getElementById("reset-button").addEventListener("click", reset);
+        refresh();
+      });
+
+      async function refresh() {
+        try {
+          state.snapshot = await fetchJson("/api/state");
+          setStatus("ready", false);
+          renderState();
+        } catch (error) {
+          setStatus("offline", true);
+          showError(error.message);
+        }
+      }
+
+      async function shorten() {
+        await runAction(async () => {
+          const longUrl = document.getElementById("long-url").value;
+          const strategy = document.getElementById("strategy").value;
+          state.lastResult = await fetchJson("/api/shorten", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ longUrl, strategy }),
+          });
+          state.lastTrace = state.lastResult.collisionSteps || [];
+          renderResult();
+          renderTrace();
+          await refresh();
+        });
+      }
+
+      async function collisionDemo() {
+        await runAction(async () => {
+          const longUrl = document.getElementById("long-url").value;
+          const result = await fetchJson("/api/collision-demo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ longUrl, strategy: "HASH" }),
+          });
+          state.lastResult = result.second;
+          state.lastTrace = [
+            { attempt: 0, code: result.forcedCode, occupiedBy: result.first.mapping.longUrl, action: "충돌 재현용 URL이 강제 코드 선점" },
+            ...(result.second.collisionSteps || []),
+          ];
+          renderCollisionResult(result);
+          renderTrace();
+          await refresh();
+        });
+      }
+
+      async function reset() {
+        await runAction(async () => {
+          await fetchJson("/api/reset", { method: "DELETE" });
+          state.lastResult = null;
+          state.lastTrace = [];
+          document.getElementById("result").innerHTML = '<p class="empty">아직 생성된 단축 URL이 없습니다.</p>';
+          renderTrace();
+          await refresh();
+        });
+      }
+
+      async function runAction(action) {
+        state.loading = true;
+        setButtons(true);
+        setStatus("working", false);
+        try {
+          await action();
+        } catch (error) {
+          showError(error.message);
+        } finally {
+          state.loading = false;
+          setButtons(false);
+          setStatus("ready", false);
+        }
+      }
+
+      async function fetchJson(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const text = await response.text();
+          let message = text || `HTTP ${response.status}`;
+          try {
+            message = JSON.parse(text).message || message;
+          } catch (ignored) {
+          }
+          throw new Error(message);
+        }
+        if (response.status === 204) {
+          return null;
+        }
+        const text = await response.text();
+        return text ? JSON.parse(text) : null;
+      }
+
+      function renderState() {
+        if (!state.snapshot) {
+          return;
+        }
+        document.getElementById("metric-total").textContent = state.snapshot.totalMappings;
+        document.getElementById("metric-hash").textContent = state.snapshot.hashMappings;
+        document.getElementById("metric-id").textContent = state.snapshot.idMappings;
+        document.getElementById("metric-redirect").textContent = state.snapshot.totalRedirects;
+        document.getElementById("metric-worker").textContent = `${state.snapshot.datacenterId}/${state.snapshot.workerId}`;
+        document.getElementById("mapping-count").textContent = state.snapshot.totalMappings;
+        renderMappings();
+      }
+
+      function renderMappings() {
+        const mappings = state.snapshot.recentMappings || [];
+        if (mappings.length === 0) {
+          document.getElementById("mapping-body").innerHTML = '<tr><td class="empty" colspan="6">매핑이 없습니다.</td></tr>';
+          return;
+        }
+        const sorted = [...mappings].sort((left, right) => right.order - left.order);
+        document.getElementById("mapping-body").innerHTML = sorted.map((mapping) => `
+          <tr>
+            <td class="nowrap">${mapping.order}</td>
+            <td class="nowrap"><a href="${escapeAttribute(mapping.shortUrl)}" target="_blank" rel="noreferrer"><code>${escapeHtml(mapping.code)}</code></a></td>
+            <td>${strategyPill(mapping.strategy)}</td>
+            <td>${escapeHtml(mapping.longUrl)}</td>
+            <td>${renderDetail(mapping)}</td>
+            <td class="nowrap">${mapping.redirectCount}</td>
+          </tr>
+        `).join("");
+      }
+
+      function renderResult() {
+        if (!state.lastResult) {
+          return;
+        }
+        document.getElementById("result-badge").textContent = state.lastResult.reused ? "reused" : "created";
+        document.getElementById("result").innerHTML = resultCard(state.lastResult.mapping, state.lastResult.message);
+      }
+
+      function renderCollisionResult(result) {
+        document.getElementById("result-badge").textContent = "collision";
+        document.getElementById("result").innerHTML = [
+          resultCard(result.first.mapping, "충돌 재현용 URL"),
+          resultCard(result.second.mapping, "요청 URL"),
+        ].join("");
+      }
+
+      function resultCard(mapping, title) {
+        return `
+          <section class="result-card">
+            <strong>${escapeHtml(title)}</strong>
+            <a href="${escapeAttribute(mapping.shortUrl)}" target="_blank" rel="noreferrer">${escapeHtml(mapping.shortUrl)}</a>
+            <div class="pill-row">
+              ${strategyPill(mapping.strategy)}
+              <span class="pill">code ${escapeHtml(mapping.code)}</span>
+              ${mapping.hashAttempt > 0 ? `<span class="pill warn">retry ${mapping.hashAttempt}</span>` : ""}
+              ${mapping.numericId ? `<span class="pill">id ${escapeHtml(mapping.numericId)}</span>` : ""}
+            </div>
+            <p>${escapeHtml(mapping.longUrl)}</p>
+          </section>
+        `;
+      }
+
+      function renderTrace() {
+        document.getElementById("trace-count").textContent = state.lastTrace.length;
+        if (!state.lastTrace || state.lastTrace.length === 0) {
+          document.getElementById("trace").innerHTML = '<p class="empty">충돌 이벤트가 없습니다.</p>';
+          return;
+        }
+        document.getElementById("trace").innerHTML = state.lastTrace.map((step) => `
+          <div class="trace-line">
+            <strong>attempt ${step.attempt}</strong>
+            <code>${escapeHtml(step.code)}</code>
+            <span>${escapeHtml(step.action)}</span>
+            <div>${escapeHtml(step.occupiedBy || "")}</div>
+          </div>
+        `).join("");
+      }
+
+      function renderDetail(mapping) {
+        if (mapping.strategy === "ID_BASE62") {
+          return [
+            `<code>${escapeHtml(mapping.numericId)}</code>`,
+            `dc=${mapping.datacenterId}`,
+            `worker=${mapping.workerId}`,
+            `seq=${mapping.sequence}`,
+          ].join("<br />");
+        }
+        return [
+          mapping.hashAlgorithm,
+          `attempt=${mapping.hashAttempt}`,
+        ].join("<br />");
+      }
+
+      function strategyPill(strategy) {
+        if (strategy === "ID_BASE62") {
+          return '<span class="pill id">ID + Base62</span>';
+        }
+        return '<span class="pill hash">Hash</span>';
+      }
+
+      function setButtons(disabled) {
+        document.getElementById("shorten-button").disabled = disabled;
+        document.getElementById("collision-button").disabled = disabled;
+        document.getElementById("reset-button").disabled = disabled;
+      }
+
+      function setStatus(label, failed) {
+        const element = document.getElementById("status");
+        element.textContent = label;
+        element.className = failed ? "status fail" : "status";
+      }
+
+      function showError(message) {
+        document.getElementById("result-badge").textContent = "error";
+        document.getElementById("result").innerHTML = `<p class="empty">${escapeHtml(message)}</p>`;
+      }
+
+      function escapeAttribute(value) {
+        return escapeHtml(value).replaceAll("`", "&#096;");
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>

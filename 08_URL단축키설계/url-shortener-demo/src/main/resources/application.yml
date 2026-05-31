@@ -1,0 +1,14 @@
+server:
+  port: ${SERVER_PORT:7808}
+
+spring:
+  application:
+    name: url-shortener-demo
+  thymeleaf:
+    cache: false
+
+demo:
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:7808}
+  datacenter-id: ${DATACENTER_ID:1}
+  worker-id: ${WORKER_ID:8}
+  hash-code-length: ${HASH_CODE_LENGTH:7}

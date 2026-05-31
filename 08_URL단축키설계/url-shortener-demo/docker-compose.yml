@@ -1,0 +1,10 @@
+services:
+  url-shortener:
+    build: .
+    environment:
+      SERVER_PORT: 7808
+      PUBLIC_BASE_URL: http://localhost:7808
+      DATACENTER_ID: 1
+      WORKER_ID: 8
+    ports:
+      - "7808:7808"
