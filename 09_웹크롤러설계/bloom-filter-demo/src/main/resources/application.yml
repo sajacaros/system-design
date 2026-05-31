@@ -1,0 +1,8 @@
+server:
+  port: ${SERVER_PORT:7909}
+
+spring:
+  application:
+    name: bloom-filter-demo
+  thymeleaf:
+    cache: false

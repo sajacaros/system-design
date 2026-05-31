@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bloom Filter Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: #24292f;
+        background: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        min-height: 38px;
+        padding: 8px 13px;
+        border: 1px solid #0969da;
+        border-radius: 6px;
+        color: #ffffff;
+        background: #0969da;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        color: #24292f;
+        border-color: #d0d7de;
+        background: #f6f8fa;
+      }
+
+      button.warning {
+        color: #24292f;
+        border-color: #d4a72c;
+        background: #fff8c5;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      input,
+      select {
+        min-height: 38px;
+        padding: 8px 10px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #24292f;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 18px;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        font-size: 14px;
+        letter-spacing: 0;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: #f6f8fa;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.94em;
+      }
+
+      .shell {
+        width: min(1180px, 100%);
+        margin: 0 auto;
+        padding: 18px 16px 42px;
+      }
+
+      .header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #d0d7de;
+      }
+
+      .subtitle {
+        margin-top: 6px;
+        color: #57606a;
+        line-height: 1.5;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: #fff8c5;
+        color: #7d4e00;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .status.ready {
+        color: #1a7f37;
+        background: #dafbe1;
+      }
+
+      .status.error {
+        color: #cf222e;
+        background: #ffebe9;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) auto auto auto auto auto;
+        gap: 8px;
+        align-items: center;
+        margin-top: 18px;
+      }
+
+      .config {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 18px 0;
+      }
+
+      .metric,
+      .panel,
+      .event,
+      .visited-item {
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .metric {
+        min-height: 86px;
+        padding: 14px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      .metric span {
+        color: #57606a;
+        font-size: 13px;
+      }
+
+      .main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        align-items: start;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .bit-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+        gap: 6px;
+      }
+
+      .bit {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        color: #57606a;
+        background: #f6f8fa;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .bit.on {
+        color: #ffffff;
+        border-color: #1a7f37;
+        background: #1a7f37;
+      }
+
+      .bit.probe {
+        outline: 3px solid #fb8500;
+        outline-offset: 1px;
+      }
+
+      .probe-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+        gap: 8px;
+      }
+
+      .probe {
+        padding: 10px;
+        border-radius: 8px;
+        background: #f6f8fa;
+        font-size: 13px;
+      }
+
+      .probe strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .probe.hit {
+        background: #dafbe1;
+      }
+
+      .probe.miss {
+        background: #ffebe9;
+      }
+
+      .decision {
+        margin: 10px 0 14px;
+        padding: 12px;
+        border-left: 4px solid #0969da;
+        background: #f6f8fa;
+        line-height: 1.5;
+      }
+
+      .side-stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .history {
+        display: grid;
+        gap: 8px;
+      }
+
+      .event {
+        padding: 10px;
+      }
+
+      .event-type {
+        display: inline-flex;
+        margin-bottom: 6px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #ddf4ff;
+        color: #0969da;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .event-url,
+      .visited-item {
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
+      }
+
+      .event p {
+        margin-top: 6px;
+        color: #57606a;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .visited-list {
+        display: grid;
+        max-height: 310px;
+        overflow: auto;
+        gap: 6px;
+      }
+
+      .visited-item {
+        padding: 8px;
+        background: #f6f8fa;
+      }
+
+      .sample-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .sample {
+        min-height: 30px;
+        padding: 5px 8px;
+        border-color: #d0d7de;
+        color: #24292f;
+        background: #ffffff;
+        font-size: 12px;
+      }
+
+      @media (max-width: 980px) {
+        .toolbar {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .toolbar input {
+          grid-column: 1 / -1;
+        }
+
+        .metric-row,
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .toolbar {
+          grid-template-columns: 1fr;
+        }
+
+        .config {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <h1>Bloom Filter Demo</h1>
+          <p class="subtitle"><code>visited URL</code> 여부를 작은 비트 배열로 빠르게 판단하는 크롤러용 중복 검사 실습</p>
+        </div>
+        <span id="status" class="status">loading</span>
+      </header>
+
+      <section class="toolbar" aria-label="URL controls">
+        <input id="url-input" type="url" list="sample-urls" value="https://shop.example.com/products/99" aria-label="URL" />
+        <button id="check-button" type="button">조회</button>
+        <button id="add-button" type="button">방문 처리</button>
+        <button id="false-positive-button" class="warning" type="button">False positive 찾기</button>
+        <button id="reset-button" class="secondary" type="button">초기화</button>
+        <button id="apply-config-button" class="secondary" type="button">설정 적용</button>
+      </section>
+
+      <datalist id="sample-urls"></datalist>
+
+      <section class="config" aria-label="Bloom filter settings">
+        <select id="bit-size" aria-label="Bit array size">
+          <option value="32">32 bits</option>
+          <option value="64" selected>64 bits</option>
+          <option value="128">128 bits</option>
+          <option value="256">256 bits</option>
+        </select>
+        <select id="hash-count" aria-label="Hash function count">
+          <option value="2">2 hashes</option>
+          <option value="3" selected>3 hashes</option>
+          <option value="4">4 hashes</option>
+          <option value="5">5 hashes</option>
+          <option value="7">7 hashes</option>
+        </select>
+      </section>
+
+      <section id="metrics" class="metric-row" aria-label="Bloom filter metrics"></section>
+
+      <section class="main-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Bit Array</h2>
+            <span id="array-label" class="status ready">0 bits</span>
+          </div>
+          <div id="bit-grid" class="bit-grid"></div>
+        </section>
+
+        <aside class="side-stack">
+          <section class="panel">
+            <h2>Latest Probe</h2>
+            <div id="latest-decision" class="decision">URL을 조회하거나 방문 처리하면 해시 위치가 표시됩니다.</div>
+            <div id="probe-list" class="probe-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>History</h2>
+            </div>
+            <div id="history" class="history"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Visited URLs</h2>
+              <span id="visited-count" class="status ready">0</span>
+            </div>
+            <div id="visited-list" class="visited-list"></div>
+            <div id="sample-buttons" class="sample-row"></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        bindControls();
+        await loadDashboard();
+      });
+
+      function bindControls() {
+        document.getElementById("check-button").addEventListener("click", () => submitUrl("/api/urls/check"));
+        document.getElementById("add-button").addEventListener("click", () => submitUrl("/api/urls/add"));
+        document.getElementById("false-positive-button").addEventListener("click", async () => {
+          render(await fetchJson("/api/false-positive", { method: "POST" }));
+        });
+        document.getElementById("reset-button").addEventListener("click", async () => {
+          render(await fetchJson("/api/reset", { method: "POST" }));
+        });
+        document.getElementById("apply-config-button").addEventListener("click", async () => {
+          const bitSize = document.getElementById("bit-size").value;
+          const hashFunctionCount = document.getElementById("hash-count").value;
+          render(await fetchJson(`/api/configure?bitSize=${bitSize}&hashFunctionCount=${hashFunctionCount}`, { method: "POST" }));
+        });
+      }
+
+      async function loadDashboard() {
+        try {
+          setStatus("loading", "loading");
+          render(await fetchJson("/api/dashboard"));
+          setStatus("ready", "ready");
+        } catch (error) {
+          setStatus("error", "failed");
+          console.error(error);
+        }
+      }
+
+      async function submitUrl(url) {
+        const input = document.getElementById("url-input");
+        const value = input.value.trim();
+        if (!value) {
+          input.focus();
+          return;
+        }
+        render(await fetchJson(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: value }),
+        }));
+      }
+
+      async function fetchJson(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ message: `Request failed: ${response.status}` }));
+          throw new Error(error.message);
+        }
+        return response.json();
+      }
+
+      function render(data) {
+        renderSettings(data.filter);
+        renderMetrics(data.filter);
+        renderBits(data.filter, data.latest);
+        renderLatest(data.latest);
+        renderHistory(data.history);
+        renderVisited(data.visitedUrls);
+        renderSamples(data.sampleUrls);
+      }
+
+      function renderSettings(filter) {
+        document.getElementById("bit-size").value = String(filter.bitSize);
+        document.getElementById("hash-count").value = String(filter.hashFunctionCount);
+        document.getElementById("array-label").textContent = `${filter.bitSize} bits`;
+      }
+
+      function renderMetrics(filter) {
+        document.getElementById("metrics").innerHTML = [
+          metric("visited URLs", filter.insertedItemCount),
+          metric("set bits", `${filter.setBitCount}/${filter.bitSize}`),
+          metric("fill ratio", `${Math.round(filter.fillRatio * 100)}%`),
+          metric("estimated false positive", `${(filter.estimatedFalsePositiveRate * 100).toFixed(2)}%`),
+        ].join("");
+      }
+
+      function metric(label, value) {
+        return `<article class="metric"><strong>${escapeHtml(String(value))}</strong><span>${escapeHtml(label)}</span></article>`;
+      }
+
+      function renderBits(filter, latest) {
+        const setBits = new Set(filter.setBits);
+        const probes = new Set((latest?.probes || []).map((probe) => probe.position));
+        const cells = [];
+        for (let index = 0; index < filter.bitSize; index += 1) {
+          cells.push(`<span class="bit ${setBits.has(index) ? "on" : ""} ${probes.has(index) ? "probe" : ""}">${index}</span>`);
+        }
+        document.getElementById("bit-grid").innerHTML = cells.join("");
+      }
+
+      function renderLatest(latest) {
+        const decision = latest?.decision || "URL을 조회하거나 방문 처리하면 해시 위치가 표시됩니다.";
+        document.getElementById("latest-decision").textContent = decision;
+        document.getElementById("probe-list").innerHTML = (latest?.probes || [])
+          .map((probe) => `
+            <div class="probe ${probe.alreadySet ? "hit" : "miss"}">
+              <strong>h${probe.hashIndex} -> ${probe.position}</strong>
+              <span>${probe.alreadySet ? "이미 1" : "조회 시점에는 0"}</span>
+            </div>
+          `)
+          .join("");
+
+        if (latest?.url) {
+          document.getElementById("url-input").value = latest.url;
+        }
+      }
+
+      function renderHistory(history) {
+        if (!history.length) {
+          document.getElementById("history").innerHTML = '<p class="subtitle">아직 실행 기록이 없습니다.</p>';
+          return;
+        }
+        document.getElementById("history").innerHTML = history
+          .map((event) => `
+            <article class="event">
+              <span class="event-type">${escapeHtml(event.type)}</span>
+              ${event.url ? `<div class="event-url">${escapeHtml(event.url)}</div>` : ""}
+              <p>${escapeHtml(event.decision)}</p>
+            </article>
+          `)
+          .join("");
+      }
+
+      function renderVisited(urls) {
+        document.getElementById("visited-count").textContent = String(urls.length);
+        document.getElementById("visited-list").innerHTML = urls
+          .map((url) => `<div class="visited-item">${escapeHtml(url)}</div>`)
+          .join("");
+      }
+
+      function renderSamples(urls) {
+        document.getElementById("sample-urls").innerHTML = urls
+          .map((url) => `<option value="${escapeHtml(url)}"></option>`)
+          .join("");
+        document.getElementById("sample-buttons").innerHTML = urls
+          .map((url) => `<button class="sample" type="button" onclick="pickSample('${escapeAttribute(url)}')">${escapeHtml(shortUrl(url))}</button>`)
+          .join("");
+      }
+
+      function pickSample(url) {
+        document.getElementById("url-input").value = url;
+      }
+
+      function shortUrl(url) {
+        return url.replace("https://", "").slice(0, 34);
+      }
+
+      function setStatus(state, label) {
+        const element = document.getElementById("status");
+        element.className = `status ${state}`;
+        element.textContent = label;
+      }
+
+      function escapeHtml(value) {
+        return value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function escapeAttribute(value) {
+        return escapeHtml(value).replaceAll("`", "&#096;");
+      }
+    </script>
+  </body>
+</html>
