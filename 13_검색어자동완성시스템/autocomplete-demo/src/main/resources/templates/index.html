@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Autocomplete Trie Demo</title>
+    <style>
+      :root {
+        --bg: #f6f7f1;
+        --surface: #ffffff;
+        --surface-2: #f0f4f4;
+        --ink: #202428;
+        --muted: #657174;
+        --line: #d7dfdc;
+        --green: #007c72;
+        --green-soft: #d9efec;
+        --rose: #bd455f;
+        --rose-soft: #f5dce2;
+        --gold: #b88718;
+        --shadow: 0 16px 36px rgba(34, 46, 48, 0.09);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", system-ui,
+          sans-serif;
+      }
+
+      .app {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 24px 18px 48px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 18px;
+        align-items: end;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 4px 0 0;
+        font-size: clamp(1.7rem, 3vw, 2.8rem);
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      .metrics {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .metric {
+        min-width: 104px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 3px;
+        font-size: 20px;
+      }
+
+      .query-band {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 130px;
+        gap: 12px;
+        margin: 20px 0;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      input,
+      select,
+      button {
+        min-height: 46px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 0 14px;
+      }
+
+      input {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .samples {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+
+      .sample {
+        min-height: 34px;
+        padding: 0 12px;
+        border-color: #c8d4d0;
+        color: var(--ink);
+        background: var(--surface);
+        cursor: pointer;
+      }
+
+      .sample:hover {
+        border-color: var(--green);
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        align-items: start;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        min-width: 0;
+      }
+
+      .panel-title h2 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+
+      .strategy {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .badge {
+        white-space: nowrap;
+        padding: 7px 9px;
+        background: var(--surface-2);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .panel.trie .badge {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .panel.library .badge {
+        background: var(--rose-soft);
+        color: var(--rose);
+      }
+
+      .results {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        min-height: 360px;
+      }
+
+      .result-row {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr) 94px;
+        gap: 12px;
+        align-items: center;
+        min-height: 58px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        background: #fbfcfa;
+      }
+
+      .rank {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        background: var(--ink);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .query {
+        min-width: 0;
+        font-size: 18px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+      }
+
+      .frequency {
+        text-align: right;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .bar {
+        grid-column: 2 / 4;
+        height: 5px;
+        background: #e3e9e6;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        width: 0;
+      }
+
+      .panel.trie .bar-fill {
+        background: var(--green);
+      }
+
+      .panel.library .bar-fill {
+        background: var(--rose);
+      }
+
+      .empty {
+        min-height: 240px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+      }
+
+      .diagnostics {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .diag-body {
+        padding: 16px 18px 18px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        padding: 7px 9px;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        font-weight: 700;
+        overflow-wrap: anywhere;
+      }
+
+      .key-block {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .key-block h3 {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      canvas {
+        width: 100%;
+        height: 180px;
+        display: block;
+        background: #fbfcfa;
+        border: 1px solid var(--line);
+      }
+
+      .terms {
+        max-height: 256px;
+        overflow: auto;
+        border: 1px solid var(--line);
+      }
+
+      .term-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 92px;
+        gap: 10px;
+        padding: 9px 11px;
+        border-bottom: 1px solid #e7ecea;
+        font-size: 14px;
+      }
+
+      .term-row:last-child {
+        border-bottom: 0;
+      }
+
+      .term-row strong {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .term-row span {
+        text-align: right;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      @media (max-width: 880px) {
+        .topbar,
+        .query-band,
+        .comparison,
+        .diagnostics {
+          grid-template-columns: 1fr;
+        }
+
+        .metrics {
+          justify-content: stretch;
+        }
+
+        .metric {
+          flex: 1;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .app {
+          padding: 18px 12px 32px;
+        }
+
+        .result-row {
+          grid-template-columns: 32px minmax(0, 1fr);
+        }
+
+        .frequency {
+          grid-column: 2;
+          text-align: left;
+        }
+
+        .bar {
+          grid-column: 2;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Chapter 13</div>
+          <h1>검색어 자동완성 비교</h1>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <span>Terms</span>
+            <strong id="term-count">0</strong>
+          </div>
+          <div class="metric">
+            <span>Trie Nodes</span>
+            <strong id="node-count">0</strong>
+          </div>
+          <div class="metric">
+            <span>Limit</span>
+            <strong id="limit-label">5</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="query-band">
+        <label>
+          입력
+          <input id="prefix-input" autocomplete="off" value="한" />
+        </label>
+        <label>
+          결과 수
+          <select id="limit-select">
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="samples" id="samples"></section>
+
+      <section class="comparison">
+        <article class="panel trie">
+          <div class="panel-header">
+            <div class="panel-title">
+              <h2 id="trie-name">직접 구현 트라이</h2>
+              <div class="strategy" id="trie-strategy"></div>
+            </div>
+            <div class="badge" id="trie-time">0 us</div>
+          </div>
+          <div class="results" id="trie-results"></div>
+        </article>
+
+        <article class="panel library">
+          <div class="panel-header">
+            <div class="panel-title">
+              <h2 id="library-name">korean-utils</h2>
+              <div class="strategy" id="library-strategy"></div>
+            </div>
+            <div class="badge" id="library-time">0 us</div>
+          </div>
+          <div class="results" id="library-results"></div>
+        </article>
+      </section>
+
+      <section class="diagnostics">
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <h2>조회 키</h2>
+              <div class="strategy" id="prefix-label"></div>
+            </div>
+          </div>
+          <div class="diag-body">
+            <div class="key-block">
+              <h3>Lookup</h3>
+              <div class="chips" id="lookup-keys"></div>
+            </div>
+            <div class="key-block">
+              <h3>Index Keys</h3>
+              <div class="chips" id="index-keys"></div>
+            </div>
+            <canvas id="trie-canvas" width="960" height="220"></canvas>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <h2>검색어 데이터</h2>
+              <div class="strategy">frequency desc</div>
+            </div>
+          </div>
+          <div class="diag-body">
+            <div class="terms" id="terms"></div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const input = document.getElementById("prefix-input");
+      const limitSelect = document.getElementById("limit-select");
+      const samples = ["ㅎ", "한", "한국", "ㅎㄱ", "카", "ㅋㅇ", "강", "ㄱㄴ", "값", "갑", "java", "spring"];
+      let debounceId = null;
+      let termsLoaded = false;
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function formatNumber(value) {
+        return new Intl.NumberFormat("ko-KR").format(value);
+      }
+
+      async function getJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        return response.json();
+      }
+
+      function renderSamples() {
+        document.getElementById("samples").innerHTML = samples
+          .map((sample) => `<button class="sample" type="button" data-prefix="${escapeHtml(sample)}">${escapeHtml(sample)}</button>`)
+          .join("");
+        document.querySelectorAll(".sample").forEach((button) => {
+          button.addEventListener("click", () => {
+            input.value = button.dataset.prefix;
+            refresh();
+          });
+        });
+      }
+
+      function renderResults(targetId, engine) {
+        const target = document.getElementById(targetId);
+        const maxFrequency = Math.max(
+          1,
+          ...engine.suggestions.map((item) => item.frequency),
+        );
+        if (engine.suggestions.length === 0) {
+          target.innerHTML = `<div class="empty">결과 없음</div>`;
+          return;
+        }
+        target.innerHTML = engine.suggestions
+          .map((item, index) => {
+            const width = Math.max(4, (item.frequency / maxFrequency) * 100);
+            return `
+              <div class="result-row">
+                <div class="rank">${index + 1}</div>
+                <div class="query">${escapeHtml(item.query)}</div>
+                <div class="frequency">${formatNumber(item.frequency)}</div>
+                <div class="bar"><div class="bar-fill" style="width: ${width.toFixed(1)}%"></div></div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderChips(targetId, values) {
+        const target = document.getElementById(targetId);
+        target.innerHTML = values.length
+          ? values.map((value) => `<span class="chip">${escapeHtml(value)}</span>`).join("")
+          : `<span class="chip">-</span>`;
+      }
+
+      function drawTriePath(keys) {
+        const canvas = document.getElementById("trie-canvas");
+        const context = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = "#fbfcfa";
+        context.fillRect(0, 0, width, height);
+
+        const key = keys[0] || "";
+        const chars = Array.from(key).slice(0, 14);
+        const y = height / 2;
+        const gap = chars.length > 1 ? Math.min(72, (width - 120) / (chars.length - 1)) : 72;
+        const startX = chars.length > 1 ? 60 : width / 2;
+
+        context.lineWidth = 3;
+        context.strokeStyle = "#b9c7c3";
+        context.fillStyle = "#202428";
+        context.font = "700 24px Segoe UI, sans-serif";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        for (let index = 0; index < chars.length; index += 1) {
+          const x = startX + index * gap;
+          if (index > 0) {
+            const previousX = startX + (index - 1) * gap;
+            context.beginPath();
+            context.moveTo(previousX + 24, y);
+            context.lineTo(x - 24, y);
+            context.stroke();
+          }
+          context.beginPath();
+          context.arc(x, y, 24, 0, Math.PI * 2);
+          context.fillStyle = index % 2 === 0 ? "#d9efec" : "#f5dce2";
+          context.fill();
+          context.strokeStyle = index % 2 === 0 ? "#007c72" : "#bd455f";
+          context.stroke();
+          context.fillStyle = "#202428";
+          context.fillText(chars[index], x, y + 1);
+        }
+
+        if (chars.length === 0) {
+          context.fillStyle = "#657174";
+          context.font = "700 20px Segoe UI, sans-serif";
+          context.fillText("root", width / 2, y);
+        }
+      }
+
+      function renderComparison(data) {
+        document.getElementById("term-count").textContent = data.normalization.termCount;
+        document.getElementById("node-count").textContent = data.normalization.trieNodeCount;
+        document.getElementById("limit-label").textContent = data.limit;
+        document.getElementById("prefix-label").textContent = data.prefix || "빈 입력";
+
+        document.getElementById("trie-name").textContent = data.trie.name;
+        document.getElementById("trie-strategy").textContent = data.trie.strategy;
+        document.getElementById("trie-time").textContent = `${data.trie.elapsedMicros} us`;
+        renderResults("trie-results", data.trie);
+
+        document.getElementById("library-name").textContent = data.library.name;
+        document.getElementById("library-strategy").textContent = data.library.strategy;
+        document.getElementById("library-time").textContent = `${data.library.elapsedMicros} us`;
+        renderResults("library-results", data.library);
+
+        renderChips("lookup-keys", data.normalization.lookupKeys);
+        renderChips("index-keys", data.normalization.indexKeysForInput);
+        drawTriePath(data.normalization.lookupKeys);
+      }
+
+      async function refresh() {
+        const prefix = input.value;
+        const limit = limitSelect.value;
+        const data = await getJson(
+          `/api/autocomplete/compare?prefix=${encodeURIComponent(prefix)}&limit=${encodeURIComponent(limit)}`,
+        );
+        renderComparison(data);
+        if (!termsLoaded) {
+          await loadTerms();
+          termsLoaded = true;
+        }
+      }
+
+      async function loadTerms() {
+        const terms = await getJson("/api/autocomplete/terms");
+        document.getElementById("terms").innerHTML = terms
+          .map(
+            (term) => `
+              <div class="term-row">
+                <strong>${escapeHtml(term.query)}</strong>
+                <span>${formatNumber(term.frequency)}</span>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      function scheduleRefresh() {
+        clearTimeout(debounceId);
+        debounceId = setTimeout(() => {
+          refresh().catch((error) => console.error(error));
+        }, 90);
+      }
+
+      input.addEventListener("input", scheduleRefresh);
+      limitSelect.addEventListener("change", refresh);
+      renderSamples();
+      refresh().catch((error) => console.error(error));
+    </script>
+  </body>
+</html>
