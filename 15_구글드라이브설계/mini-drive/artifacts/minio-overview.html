@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MinIO 정리 — Mini Drive 프로젝트 회고</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .flow-arrow::after { content: "→"; }
+    @media (max-width: 640px) { .flow-arrow::after { content: "↓"; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+  <!-- Hero -->
+  <header class="bg-gradient-to-br from-rose-600 via-red-600 to-orange-500 text-white">
+    <div class="max-w-5xl mx-auto px-5 py-12 sm:py-16">
+      <div class="inline-flex items-center gap-2 bg-white/15 rounded-full px-3 py-1 text-xs font-medium mb-4">
+        <span class="w-2 h-2 rounded-full bg-emerald-300"></span> Object Storage · S3 Compatible
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">MinIO 한눈에 보기</h1>
+      <p class="mt-3 text-white/90 max-w-2xl leading-relaxed">
+        고성능 S3 호환 오브젝트 스토리지. 이 문서는 MinIO의 개념·특징과,
+        <strong>Mini Drive 프로젝트에서 실제로 어떻게 쓰고 무엇을 배웠는지</strong>를 함께 정리합니다.
+      </p>
+      <p class="mt-3 text-white/85 text-sm max-w-2xl bg-white/10 rounded-xl px-4 py-3 leading-relaxed">
+        <strong>2026-06-17 갱신 (v1.6)</strong> — 다운로드를 브라우저에 presigned URL을 직접 주던 방식에서
+        <strong>nginx 게이트웨이 경유</strong>로 바꿔, <strong>“공유 링크 비활성화 → 즉시 차단”</strong>을 구현했습니다.
+        그 배경·원리·실전 버그는 6·7장에서 다룹니다.
+      </p>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-5 py-10 space-y-12">
+
+    <!-- 1. MinIO란 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">01</span> MinIO란?
+      </h2>
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 leading-relaxed">
+        <p>
+          <strong>MinIO</strong>는 오픈소스 <strong>오브젝트 스토리지</strong> 서버입니다. 파일을 디렉터리·블록이 아니라
+          <em>버킷(bucket)</em> 안의 <em>오브젝트(object)</em> 단위로 저장하며, <strong>AWS S3 API와 호환</strong>됩니다.
+          즉 S3용으로 작성한 코드를 거의 그대로 MinIO에 붙일 수 있고, 반대로 MinIO로 개발한 뒤 운영에서 AWS S3로 옮기기도 쉽습니다.
+        </p>
+        <p class="mt-3">
+          단일 바이너리로 가볍게 띄울 수 있어 <strong>로컬 개발·테스트</strong>에 특히 좋고, 분산 모드로 묶으면
+          대용량·고가용 스토리지로 확장됩니다.
+        </p>
+      </div>
+    </section>
+
+    <!-- 2. 핵심 특징 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">02</span> 핵심 특징
+      </h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div class="text-2xl mb-2">🔌</div>
+          <h3 class="font-semibold text-slate-900">S3 API 호환</h3>
+          <p class="text-sm text-slate-600 mt-1">AWS SDK·mc·s3cmd 등 S3 생태계 도구를 그대로 사용. 벤더 종속 없이 전환 가능.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div class="text-2xl mb-2">⚡</div>
+          <h3 class="font-semibold text-slate-900">고성능·경량</h3>
+          <p class="text-sm text-slate-600 mt-1">Go로 작성된 단일 바이너리. 적은 리소스로 빠르게 기동, 컨테이너 1줄로 실행.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div class="text-2xl mb-2">🛡️</div>
+          <h3 class="font-semibold text-slate-900">데이터 보호</h3>
+          <p class="text-sm text-slate-600 mt-1">Erasure Coding·Bit Rot 방지, 버저닝, 객체 잠금(WORM), 서버측 암호화 지원.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div class="text-2xl mb-2">📈</div>
+          <h3 class="font-semibold text-slate-900">수평 확장</h3>
+          <p class="text-sm text-slate-600 mt-1">분산 모드로 여러 노드·디스크를 묶어 페타바이트급까지 확장.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div class="text-2xl mb-2">🔐</div>
+          <h3 class="font-semibold text-slate-900">presigned URL</h3>
+          <p class="text-sm text-slate-600 mt-1">서버를 거치지 않고 직접 접근하는 단기 서명 URL. <span class="text-rose-700">이 프로젝트는 v1.6부터 내부 전용</span>(7장).</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div class="text-2xl mb-2">🖥️</div>
+          <h3 class="font-semibold text-slate-900">웹 콘솔 + mc CLI</h3>
+          <p class="text-sm text-slate-600 mt-1">브라우저 콘솔로 버킷·객체 관리, <span class="mono">mc</span> CLI로 스크립트 자동화.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 핵심 개념 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">03</span> 꼭 알아야 할 개념
+      </h2>
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-slate-600 text-left">
+              <tr>
+                <th class="px-4 py-3 font-semibold">용어</th>
+                <th class="px-4 py-3 font-semibold">의미</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="px-4 py-3 font-medium text-slate-900">Bucket</td><td class="px-4 py-3 text-slate-600">오브젝트를 담는 최상위 컨테이너(폴더 비슷). 예: <span class="mono">minidrive</span></td></tr>
+              <tr><td class="px-4 py-3 font-medium text-slate-900">Object</td><td class="px-4 py-3 text-slate-600">저장되는 데이터 단위(파일 + 메타데이터)</td></tr>
+              <tr><td class="px-4 py-3 font-medium text-slate-900">Key</td><td class="px-4 py-3 text-slate-600">버킷 안 오브젝트의 경로형 식별자. <span class="mono">users/1/42</span> 처럼 <em>/</em>로 계층을 흉내</td></tr>
+              <tr><td class="px-4 py-3 font-medium text-slate-900">Endpoint</td><td class="px-4 py-3 text-slate-600">S3 API 접속 주소. MinIO 기본 <span class="mono">:9000</span>(API) / <span class="mono">:9001</span>(콘솔). <span class="text-rose-700">v1.6: 9000은 호스트 비노출(내부 전용)</span></td></tr>
+              <tr><td class="px-4 py-3 font-medium text-slate-900">Path-style</td><td class="px-4 py-3 text-slate-600"><span class="mono">host/bucket/key</span> 형식. MinIO는 보통 path-style 사용(<span class="mono">path-style-access=true</span>)</td></tr>
+              <tr><td class="px-4 py-3 font-medium text-slate-900">presigned URL</td><td class="px-4 py-3 text-slate-600">일정 시간만 유효한 서명 URL. 인증 없이 그 URL로 직접 다운/업로드</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 이 프로젝트에서 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">04</span> Mini Drive에서 MinIO를 이렇게 썼다
+      </h2>
+
+      <!-- 아키텍처 흐름 -->
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 mb-4">
+        <p class="text-sm text-slate-500 mb-4">업로드/다운로드 데이터 흐름</p>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 text-center text-sm">
+          <div class="flex-1 bg-sky-50 ring-1 ring-sky-200 rounded-xl px-3 py-3 font-medium text-sky-800">React<br>(브라우저)</div>
+          <span class="flow-arrow text-slate-400 font-bold self-center"></span>
+          <div class="flex-1 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-3 font-medium text-emerald-800">Spring Boot<br><span class="font-normal text-xs">StorageService</span></div>
+          <span class="flow-arrow text-slate-400 font-bold self-center"></span>
+          <div class="flex-1 bg-rose-50 ring-1 ring-rose-200 rounded-xl px-3 py-3 font-medium text-rose-800">MinIO<br><span class="font-normal text-xs">bucket: minidrive</span></div>
+        </div>
+        <p class="text-xs text-slate-500 mt-4">
+          메타데이터(파일명·소유자·버전)는 PostgreSQL에, <strong>실제 바이트는 MinIO에</strong> 저장.
+          업로드는 multipart로 백엔드를 경유하고, <strong class="text-rose-700">다운로드는 v1.6부터 nginx 게이트웨이 경유</strong>다:
+          백엔드가 매 요청 인가 후 <span class="mono">X-Accel-Redirect</span>로 nginx가 MinIO에서 직접 스트리밍(서버 대역폭은 비경유, 7장).
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <!-- 저장 구조 -->
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+          <h3 class="font-semibold text-slate-900 mb-3">📂 오브젝트 키 설계</h3>
+          <pre class="mono text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto leading-relaxed">minidrive/                  <span class="text-slate-400"># 버킷</span>
+├── users/{userId}/{fileId}  <span class="text-slate-400"># 현재 원본</span>
+├── versions/{fileId}/v1     <span class="text-slate-400"># 버전 스냅샷</span>
+│                 /v2
+└── thumbnails/{fileId}.png  <span class="text-slate-400"># 썸네일</span></pre>
+          <p class="text-sm text-slate-600 mt-3">버전을 별도 키로 보존 → 이전 버전 복구 시 유실 0%.</p>
+        </div>
+
+        <!-- 추상화 -->
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+          <h3 class="font-semibold text-slate-900 mb-3">🔧 S3 추상화 (전환 가능성)</h3>
+          <p class="text-sm text-slate-600">
+            스토리지 접근을 <span class="mono">StorageService</span> 인터페이스
+            (<span class="mono">put / get / presignGet / delete</span>)로 감싸고,
+            구현은 <strong>AWS SDK v2 <span class="mono">S3Client</span></strong> (path-style)로 작성.
+          </p>
+          <div class="mt-3 flex items-center gap-2 text-sm">
+            <span class="bg-rose-100 text-rose-700 rounded-md px-2 py-1 mono text-xs">MinIO</span>
+            <span class="text-slate-400">→ endpoint/키만 교체 →</span>
+            <span class="bg-orange-100 text-orange-700 rounded-md px-2 py-1 mono text-xs">AWS S3</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-3">코드 변경 없이 운영 스토리지를 S3로 전환할 수 있게 설계.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. 버전 관리 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">05</span> 버전 관리는 누가 하나?
+      </h2>
+
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 leading-relaxed mb-4">
+        <p>
+          “버전 관리”에는 두 가지 방식이 있습니다. Mini Drive는 그중 <strong>앱 레벨 버저닝</strong>을 택했고,
+          <strong>MinIO 네이티브 버저닝은 사용하지 않습니다</strong>(버킷은 <span class="mono">un-versioned</span>).
+          즉 MinIO 입장에선 서로 다른 객체일 뿐이고, “같은 파일의 버전”이라는 의미는 전적으로 <strong>PostgreSQL</strong>이 압니다.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-emerald-200 p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-md px-2 py-0.5">채택 ✓</span>
+            <h3 class="font-semibold text-slate-900">앱 레벨 버저닝</h3>
+          </div>
+          <p class="text-sm text-slate-600">버전마다 <strong>다른 키</strong>로 저장하고, 이력은 <span class="mono">file_version</span> 테이블(DB)이 추적.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 opacity-90">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-slate-200 text-slate-600 text-xs font-semibold rounded-md px-2 py-0.5">미사용</span>
+            <h3 class="font-semibold text-slate-900">MinIO 네이티브 버저닝</h3>
+          </div>
+          <p class="text-sm text-slate-600">S3 versioning을 켜면 <strong>같은 키</strong>의 과거 버전을 MinIO가 자동 보관(version-id로 접근).</p>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <!-- 키 구조 -->
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+          <h3 class="font-semibold text-slate-900 mb-3">🗂️ 버전 = 별도 키 (런타임 실제 모습)</h3>
+          <pre class="mono text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto leading-relaxed">users/1/3          <span class="text-slate-400"># 현재 버전 원본</span>
+versions/3/v1      <span class="text-slate-400"># 버전 1 스냅샷</span>
+versions/3/v2      <span class="text-slate-400"># 버전 2 스냅샷</span>
+versions/1/v1,v2,v3 ...</pre>
+          <p class="text-xs text-slate-500 mt-3">버킷 조회 시 <span class="mono">me/minidrive is un-versioned</span> — MinIO 버저닝 OFF.</p>
+        </div>
+        <!-- DB가 진실 -->
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+          <h3 class="font-semibold text-slate-900 mb-3">🧭 DB가 진실의 원천</h3>
+          <p class="text-sm text-slate-600 mb-2"><span class="mono">file_version</span> 테이블이 버전 메타를 보관:</p>
+          <pre class="mono text-xs bg-slate-100 text-slate-700 rounded-xl p-4 overflow-x-auto leading-relaxed">file_id | version | object_key       | size
+   3    |    1    | versions/3/v1    |  22
+   3    |    2    | versions/3/v2    |  10</pre>
+          <p class="text-xs text-slate-500 mt-3"><span class="mono">users/{userId}/{fileId}</span>는 항상 현재 버전을 가리킴.</p>
+        </div>
+      </div>
+
+      <!-- 동작 흐름 -->
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 mb-4">
+        <h3 class="font-semibold text-slate-900 mb-3">⚙️ 동작</h3>
+        <ul class="text-sm text-slate-600 space-y-2 list-disc list-inside">
+          <li><strong>새 버전 업로드</strong>: <span class="mono">versions/{fileId}/v{n}</span>에 저장 + <span class="mono">file_version</span> 행 추가, 현재 키 갱신</li>
+          <li><strong>복구</strong>: 과거 <span class="mono">v{k}</span>를 <strong>새 버전으로 복사 생성</strong> → 이력 보존(유실 0%)</li>
+          <li><strong>특정 버전 다운로드</strong>: 그 버전 키로 게이트웨이 스트리밍(v1.6, 7장)</li>
+          <li><strong>충돌</strong>: <span class="mono">baseVersion</span> 불일치 시 409(먼저 저장 우선)</li>
+        </ul>
+      </div>
+
+      <!-- 트레이드오프 -->
+      <div class="bg-slate-100 rounded-2xl p-6">
+        <h3 class="font-semibold text-slate-900 mb-2">왜 앱 레벨인가 (트레이드오프)</h3>
+        <div class="grid sm:grid-cols-2 gap-4 text-sm">
+          <div>
+            <p class="font-medium text-emerald-700 mb-1">앱 레벨 장점</p>
+            <ul class="text-slate-600 space-y-1 list-disc list-inside">
+              <li>버전 메타를 DB로 질의·정렬·권한검증</li>
+              <li>모든 S3 호환 스토리지에서 동일 동작(이식성)</li>
+              <li>복구/삭제 로직을 완전히 통제</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-medium text-slate-700 mb-1">네이티브 버저닝이라면</p>
+            <ul class="text-slate-600 space-y-1 list-disc list-inside">
+              <li><span class="mono">mc version enable</span> 한 줄로 자동 보관</li>
+              <li>단, DB 이력과 <strong>이중 관리</strong>·중복</li>
+              <li>메타 질의가 S3 API에 묶임</li>
+            </ul>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-4">운영에서 실수 삭제 보호·백업이 더 필요하면, 네이티브 버저닝을 <em>보조</em>로 켜는 선택지가 있습니다.</p>
+      </div>
+    </section>
+
+    <!-- 6. presigned URL 원리 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">06</span> presigned URL은 어떻게 동작하나
+      </h2>
+
+      <div class="bg-indigo-50 ring-1 ring-indigo-200 rounded-2xl p-4 mb-4 text-sm text-indigo-900 leading-relaxed">
+        <strong>v1.6 안내</strong> — 아래 SigV4 <em>원리</em>는 그대로 유효하지만, 이 프로젝트에서는 이제 presigned URL을
+        <strong>브라우저에 발급하지 않습니다</strong>. nginx↔MinIO <strong>내부 전용</strong>(브라우저 비노출)으로만 쓰이고 TTL도 60초로 짧습니다.
+        브라우저용 다운로드 흐름은 <strong>7장의 게이트웨이 모델</strong>을 보세요.
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 leading-relaxed mb-4">
+        <p>
+          핵심은 <strong>비밀키를 노출하지 않고도, 특정 요청을 특정 시각까지만 허가했다는 걸 서명으로 증명</strong>하는 것입니다.
+          AWS <strong>SigV4</strong>(Signature Version 4) 방식이며 MinIO도 S3 호환이라 동일하게 씁니다.
+        </p>
+        <p class="mt-2 text-sm text-slate-500">
+          비유: <strong>봉인된 결재 도장</strong>. 도장(secret key)은 금고에 있고, "○○파일, △시까지 유효"라 적고 서명해 내보낸다.
+          받는 쪽은 도장 없이 서류만 내면 되고, 내용을 고치면 도장 자국과 안 맞아 들통난다.
+        </p>
+      </div>
+
+      <!-- URL 해부 -->
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 mb-4">
+        <h3 class="font-semibold text-slate-900 mb-3">🔬 실제 발급 URL 해부</h3>
+        <pre class="mono text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto leading-relaxed">http://minio:9000/minidrive/users/1/3   <span class="text-slate-400"># v1.6: 내부 endpoint(브라우저 비노출)</span>
+  ?X-Amz-Algorithm=AWS4-HMAC-SHA256   <span class="text-slate-400"># 서명 알고리즘</span>
+  &X-Amz-Credential=minioadmin/2026.../s3/aws4_request <span class="text-slate-400"># 누구+범위</span>
+  &X-Amz-Date=20260617T011500Z        <span class="text-slate-400"># 서명 생성 시각</span>
+  &X-Amz-Expires=60                   <span class="text-emerald-300"># 유효 기간(초) — v1.6 내부 전용 60초</span>
+  &X-Amz-SignedHeaders=host           <span class="text-slate-400"># 서명에 포함된 헤더(host=minio:9000)</span>
+  &X-Amz-Signature=2091a6c649...      <span class="text-amber-300"># HMAC 서명 결과</span></pre>
+        <p class="text-xs text-slate-500 mt-3">secret key 자체는 URL에 <strong>없습니다</strong>. 들어가는 건 access key 식별자와 일방향 해시(서명)뿐.
+          <strong class="text-rose-700">v1.6:</strong> 이 URL은 백엔드가 <span class="mono">X-Accel-Redirect</span>로 nginx에만 넘기며 <strong>브라우저로는 흐르지 않습니다</strong>.</p>
+      </div>
+
+      <!-- 서명/검증 흐름 -->
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-emerald-200 p-6">
+          <h3 class="font-semibold text-emerald-800 mb-2">① 서명 생성 — 백엔드</h3>
+          <ol class="text-sm text-slate-600 space-y-1 list-decimal list-inside">
+            <li>요청 정규화: 메서드+경로+쿼리(<span class="mono">expires·date</span> 포함)+헤더</li>
+            <li>정해진 규칙으로 "string-to-sign" 구성</li>
+            <li>secret key로 파생키 → <strong>HMAC-SHA256</strong> 계산 = 서명</li>
+            <li>서명을 URL 쿼리에 붙여 완성</li>
+          </ol>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-sky-200 p-6">
+          <h3 class="font-semibold text-sky-800 mb-2">② 검증 — MinIO</h3>
+          <ol class="text-sm text-slate-600 space-y-1 list-decimal list-inside">
+            <li>들어온 요청에서 경로·쿼리·헤더·시각을 꺼냄</li>
+            <li>자기 secret key로 <strong>같은 계산을 다시</strong> 수행</li>
+            <li>재계산 서명 == URL의 서명 → 허가</li>
+            <li>하나라도 다르면 거부(<span class="mono">SignatureDoesNotMatch</span>)</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- 만료 잠금 -->
+      <div class="bg-amber-50 ring-1 ring-amber-300 rounded-2xl p-6 mb-4">
+        <h3 class="font-semibold text-amber-900 mb-2">⏱️ "기간(expires)"이 위조 불가능한 이유</h3>
+        <ul class="text-sm text-amber-900/90 space-y-1 list-disc list-inside">
+          <li><span class="mono">X-Amz-Date</span> + <span class="mono">X-Amz-Expires</span>는 <strong>서명 계산의 입력값</strong> → 기간을 늘리면 서명이 안 맞아 무효</li>
+          <li>기간을 정당히 바꾸려면 secret key가 필요한데, 클라이언트엔 없음</li>
+          <li>MinIO는 추가로 <strong>현재 시각 &gt; (date+expires)</strong> 이면 거부(<span class="mono">Request has expired</span>)</li>
+        </ul>
+        <p class="text-xs text-amber-800 mt-3">→ 서명으로 잠그고 + 시각 검사로 강제하는 <strong>이중 장치</strong>.</p>
+      </div>
+
+      <div class="bg-rose-50 ring-1 ring-rose-200 rounded-2xl p-5">
+        <p class="text-sm text-rose-900">
+          ⚠️ <strong>bearer 특성 — 개별 취소 불가</strong>: 발급된 presigned URL은 만료 전까지 URL을 가진 누구나 접근 가능하고,
+          S3/MinIO 구조상 <strong>개별 무효화가 불가능</strong>합니다(MinIO GitHub <span class="mono">#5180·#14491</span> 등 “working as intended”).
+          이 때문에 <strong>공유 링크를 꺼도 이미 발급된 URL이 TTL 동안 우회</strong>되는 문제가 있었고 →
+          v1.6에서 브라우저에 presign을 주지 않는 <strong>게이트웨이 모델</strong>로 전환했습니다(바로 아래 7장).
+        </p>
+      </div>
+    </section>
+
+    <!-- 7. 실전 교훈 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">07</span> 실전에서 부딪힌 교훈
+      </h2>
+      <!-- 교훈 1 (v1.6 핵심): 공유 비활성화 우회 → 게이트웨이 -->
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-rose-200 p-6 mb-4">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="bg-rose-100 text-rose-700 text-xs font-semibold rounded-md px-2 py-0.5">v1.6 · 핵심</span>
+          <h3 class="font-semibold text-slate-900">공유 링크를 꺼도 MinIO로 직접 다운로드되던 문제</h3>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          공유 링크를 비활성화(<span class="mono">is_active=false</span>)해도, <strong>비활성화 직전에 발급된 presigned URL이
+          TTL(당시 5분) 동안 살아 있어</strong> MinIO에 직접 접근하는 우회가 가능했습니다.
+          presigned URL은 S3/MinIO 구조상 <strong>개별 취소가 불가능</strong>합니다(MinIO GitHub <span class="mono">#5180</span> 등 “working as intended”).
+        </p>
+
+        <div class="mt-4 grid md:grid-cols-2 gap-3 text-xs">
+          <div class="bg-rose-50 ring-1 ring-rose-200 rounded-xl p-4">
+            <div class="font-semibold text-rose-800 mb-2">이전 (v1.5) — 우회 가능</div>
+            <p class="text-slate-600 leading-relaxed">브라우저 →(5분 presigned URL)→ <strong>MinIO 직접</strong>.
+            MinIO는 <span class="mono">is_active</span>를 모르므로 서명만 유효하면 내줌 → 비활성화 우회.</p>
+          </div>
+          <div class="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl p-4">
+            <div class="font-semibold text-emerald-800 mb-2">현재 (v1.6) — 즉시 차단</div>
+            <p class="text-slate-600 leading-relaxed">브라우저 → nginx → <strong>백엔드(매 요청 인가)</strong> →
+            <span class="mono">X-Accel-Redirect</span> → nginx가 MinIO에서 스트리밍. 끄면 다음 요청부터 즉시 410.</p>
+          </div>
+        </div>
+
+        <pre class="mono text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto leading-relaxed mt-4">브라우저 → nginx → 백엔드 : is_active/만료/소유자 <span class="text-emerald-300">실시간 인가</span>
+                        ├─ 거부 → 410 DISABLED (바이트 안 나감)
+                        └─ 허가 → <span class="text-amber-300">X-Accel-Redirect: /_minio/...</span> (바디 없음)
+            nginx ──internal──→ MinIO(minio:9000) : 스트리밍 (백엔드 비경유)</pre>
+        <p class="text-xs text-slate-500 mt-3">
+          내부 presign(60초)은 <strong>nginx만</strong> 보고 브라우저엔 노출되지 않습니다 — 더 이상 “보안 경계”가 아니라
+          nginx가 MinIO 문을 여는 일회용 열쇠일 뿐. 보안 판정은 그 앞 백엔드 인가에서 끝납니다.
+          MinIO API 포트(9000)도 호스트에서 <strong>비노출</strong>해 직접 접근 경로 자체를 제거했습니다.
+        </p>
+      </div>
+
+      <!-- 교훈 2: 실기동 E2E에서만 드러난 nginx 함정 3종 -->
+      <div class="bg-amber-50 ring-1 ring-amber-300 rounded-2xl p-6 mb-4">
+        <h3 class="font-semibold text-amber-900 mb-3">🧪 실기동 E2E에서만 드러난 nginx 함정 3종</h3>
+        <p class="text-sm text-amber-900/90 mb-3">정적 검증·단위테스트는 모두 통과했지만, 실제 컨테이너로 띄우니 nginx↔MinIO 연동에서 셋이 터졌습니다.</p>
+        <ul class="text-sm text-amber-900/90 space-y-3 list-disc list-inside">
+          <li>
+            <strong>Host 헤더가 서명과 어긋남</strong> — <span class="mono">upstream minidrive_minio</span>처럼
+            named upstream으로 프록시하면 nginx가 보내는 기본 Host(<span class="mono">$proxy_host</span>)가
+            <strong>upstream 이름</strong>(<span class="mono">minidrive_minio</span>, 언더스코어 포함)으로 나갑니다.
+            그러면 두 가지가 동시에 깨집니다: ① MinIO가 언더스코어 호스트를 <span class="mono">invalid hostname</span>으로 거부,
+            ② 백엔드가 <span class="mono">minio:9000</span> 기준으로 만든 <strong>SigV4 서명의 host와 불일치</strong>해
+            <span class="mono">SignatureDoesNotMatch</span>.
+            <br><span class="text-amber-800">→ 해결: <span class="mono">proxy_set_header Host minio:9000;</span> — 서명에 쓰인 값과
+            글자 그대로 같은 Host를 강제해 서명을 일치시킴.</span>
+          </li>
+          <li>
+            <strong>Authorization 헤더 누수</strong> — 인증 다운로드(<span class="mono">/api/files/…</span>)에서는 브라우저가
+            <span class="mono">Authorization: Bearer &lt;JWT&gt;</span>를 함께 보냅니다. 이 헤더를 nginx가 MinIO까지 그대로 전달하면
+            URL 쿼리의 presign(SigV4)과 인증 수단이 <strong>두 개</strong>가 되어 MinIO가
+            <span class="mono">multiple authentication types</span>로 거부합니다. MinIO 인증은 오직 쿼리 presign으로만 합니다.
+            <br><span class="text-amber-800">→ 해결: <span class="mono">proxy_set_header Authorization "";</span> — MinIO로 가는
+            인증 헤더를 빈 값으로 덮어 presign만 남김.</span>
+          </li>
+          <li>
+            <strong>단일 파일 bind-mount의 inode 교체</strong> — <span class="mono">nginx.conf</span>를 파일 하나로 마운트하면,
+            에디터가 atomic-save(임시 파일에 쓴 뒤 rename)로 저장할 때 <strong>inode가 바뀝니다</strong>.
+            컨테이너는 옛 inode를 계속 들고 있어, 내용을 고치고 <span class="mono">nginx -s reload</span>를 해도
+            <strong>변경이 반영되지 않습니다</strong>(reload 무효). "고쳤는데 왜 안 바뀌지"로 한참 헤맬 수 있습니다.
+            <br><span class="text-amber-800">→ 해결: 설정 변경 후 <span class="mono">docker compose up -d --force-recreate</span>로
+            컨테이너 재생성(혹은 파일 대신 <strong>디렉터리를 마운트</strong>해 inode 교체 자체를 회피).</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- 교훈 3: v1.2 presign 호스트 함정 (v1.6에서 해소) -->
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="bg-slate-200 text-slate-600 text-xs font-semibold rounded-md px-2 py-0.5">v1.2 · v1.6에서 해소됨</span>
+          <h3 class="font-semibold text-slate-900">presigned URL의 “호스트 주소” 함정</h3>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          예전엔 컨테이너 내부 주소(<span class="mono">http://minio:9000</span>)로 presign을 발급하면 브라우저가 <span class="mono">minio</span> 호스트를
+          몰라 다운로드가 실패했고, 그래서 <span class="mono">MINIO_PUBLIC_ENDPOINT</span>(<span class="mono">http://localhost:9000</span>)를 따로 두어
+          presign 발급에만 공개 호스트를 썼습니다.
+        </p>
+        <p class="text-sm text-slate-600 mt-2">
+          <strong class="text-rose-700">v1.6에서는 이 문제가 통째로 사라졌습니다</strong> — 브라우저가 더 이상 presign을 받지 않으므로
+          <span class="mono">MINIO_PUBLIC_ENDPOINT</span>를 <strong>제거</strong>했고, presign은 내부 endpoint(<span class="mono">minio:9000</span>)로만 서명합니다.
+        </p>
+      </div>
+
+      <p class="text-xs text-slate-500 mt-3">그 외: 기동 시 <span class="mono">mc</span> 일회성 컨테이너로 <span class="mono">minidrive</span> 버킷 자동 생성, 헬스체크로 기동 순서 보장.</p>
+    </section>
+
+    <!-- 8. MinIO vs S3 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">08</span> MinIO vs AWS S3
+      </h2>
+      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-slate-600 text-left">
+              <tr><th class="px-4 py-3 font-semibold">항목</th><th class="px-4 py-3 font-semibold">MinIO</th><th class="px-4 py-3 font-semibold">AWS S3</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="px-4 py-3 font-medium">운영 주체</td><td class="px-4 py-3 text-slate-600">직접 설치·운영(셀프호스트)</td><td class="px-4 py-3 text-slate-600">AWS 관리형</td></tr>
+              <tr><td class="px-4 py-3 font-medium">비용</td><td class="px-4 py-3 text-slate-600">인프라 비용만(무료 SW)</td><td class="px-4 py-3 text-slate-600">사용량 과금</td></tr>
+              <tr><td class="px-4 py-3 font-medium">API</td><td class="px-4 py-3 text-slate-600">S3 호환</td><td class="px-4 py-3 text-slate-600">S3 원본</td></tr>
+              <tr><td class="px-4 py-3 font-medium">적합한 곳</td><td class="px-4 py-3 text-slate-600">로컬 개발·온프레미스·엣지·테스트</td><td class="px-4 py-3 text-slate-600">대규모 클라우드 운영</td></tr>
+              <tr><td class="px-4 py-3 font-medium">전환</td><td class="px-4 py-3 text-slate-600" colspan="2">S3 호환 덕분에 코드 변경 없이 endpoint/자격증명만 교체 ↔</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. 직접 해보기 -->
+    <section>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <span class="text-rose-600">09</span> 직접 만져보기
+      </h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+          <h3 class="font-semibold text-slate-900 mb-2">🖥️ 웹 콘솔</h3>
+          <p class="text-sm text-slate-600">브라우저에서 <a href="http://localhost:9001" class="text-rose-600 underline">http://localhost:9001</a></p>
+          <p class="text-sm text-slate-600 mt-1"><span class="mono">minidrive</span> 버킷에서 업로드된 객체(<span class="mono">users/…</span>, <span class="mono">versions/…</span>)를 직접 확인.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6">
+          <h3 class="font-semibold text-slate-900 mb-2">⌨️ mc CLI 예시</h3>
+          <pre class="mono text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto leading-relaxed"><span class="text-slate-400"># v1.6: API 9000은 호스트 비노출 → 도커 네트워크 안에서 실행</span>
+docker exec -it minidrive-minio sh
+mc alias set local \
+  http://minio:9000 \
+  minioadmin change-me-...
+mc ls --recursive local/minidrive</pre>
+        </div>
+      </div>
+    </section>
+
+    <footer class="pt-6 border-t border-slate-200 text-center text-xs text-slate-400">
+      Mini Drive 프로젝트 회고 · MinIO 정리 · 2026-06-16 (v1.6 갱신 2026-06-17) · 단일 HTML(자체완결, Tailwind CDN)
+    </footer>
+  </main>
+</body>
+</html>
